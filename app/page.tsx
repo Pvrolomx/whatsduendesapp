@@ -107,6 +107,17 @@ export default function WhatsApp() {
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
+  // Polling siempre activo cada 3 segundos (backup para SSE)
+  useEffect(() => {
+    if (!selectedChannel || !dbInitialized) return
+    
+    const interval = setInterval(() => {
+      loadMessages()
+    }, 3000)
+    
+    return () => clearInterval(interval)
+  }, [selectedChannel, dbInitialized, loadMessages])
+
   const uploadFile = async (file: File) => {
     const formData = new FormData()
     formData.append('file', file)
