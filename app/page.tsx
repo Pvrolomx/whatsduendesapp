@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Send, Paperclip, ArrowLeft, Menu, Image, File, X, Loader2, MessageCircle } from 'lucide-react'
+import { Send, Paperclip, ArrowLeft, Image, File, X, Loader2, MessageCircle, Wifi, WifiOff } from 'lucide-react'
 
 interface Channel {
   id: number
@@ -36,10 +36,11 @@ export default function WhatsApp() {
   const [uploading, setUploading] = useState(false)
   const [pendingFiles, setPendingFiles] = useState<Attachment[]>([])
   const [dbInitialized, setDbInitialized] = useState(false)
+  const [connected, setConnected] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const eventSourceRef = useRef<EventSource | null>(null)
 
-  // Init database on mount
   useEffect(() => {
     fetch('/api/init')
       .then(r => r.json())
@@ -74,11 +75,56 @@ export default function WhatsApp() {
     }
   }, [selectedChannel])
 
+  // SSE Connection
   useEffect(() => {
-    if (selectedChannel && dbInitialized) {
-      loadMessages()
-      const interval = setInterval(loadMessages, 5000) // Poll every 5s
-      return () => clearInterval(interval)
+    if (!selectedChannel || !dbInitialized) return
+
+    // Close existing connection
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close()
+    }
+
+    // Load initial messages
+    loadMessages()
+
+    // Setup SSE
+    const eventSource = new EventSource(`/api/subscribe?channel=${selectedChannel.id}`)
+    eventSourceRef.current = eventSource
+
+    eventSource.onopen = () => {
+      setConnected(true)
+    }
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data)
+        if (data.type === 'connected') {
+          setConnected(true)
+        } else if (data.type === 'message') {
+          setMessages(prev => {
+            // Avoid duplicates
+            if (prev.find(m => m.id === data.data.id)) return prev
+            return [...prev, data.data]
+          })
+        }
+      } catch (e) {
+        console.error('SSE parse error:', e)
+      }
+    }
+
+    eventSource.onerror = () => {
+      setConnected(false)
+      // Reconnect after 3 seconds
+      setTimeout(() => {
+        if (eventSourceRef.current?.readyState === EventSource.CLOSED) {
+          loadMessages() // Fallback to regular fetch
+        }
+      }, 3000)
+    }
+
+    return () => {
+      eventSource.close()
+      setConnected(false)
     }
   }, [selectedChannel, dbInitialized, loadMessages])
 
@@ -103,7 +149,8 @@ export default function WhatsApp() {
       })
       setNewMessage('')
       setPendingFiles([])
-      loadMessages()
+      // SSE will handle the update, but fetch as backup
+      if (!connected) loadMessages()
     } catch (error) {
       console.error('Error sending message:', error)
     }
@@ -147,14 +194,12 @@ export default function WhatsApp() {
 
   const isImage = (type: string) => type?.startsWith('image/')
 
-  // Mobile: show channel list or chat
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
 
   return (
     <div className="h-screen flex bg-whatsapp-bg">
-      {/* Sidebar - Channels */}
+      {/* Sidebar */}
       <div className={`${showSidebar || !selectedChannel ? 'flex' : 'hidden'} md:flex flex-col w-full md:w-80 bg-white border-r border-gray-200`}>
-        {/* Header */}
         <div className="bg-whatsapp-dark text-white p-4 flex items-center gap-3">
           <MessageCircle size={28} />
           <div>
@@ -163,7 +208,6 @@ export default function WhatsApp() {
           </div>
         </div>
         
-        {/* Sender selector */}
         <div className="p-3 bg-gray-50 border-b">
           <select 
             value={sender} 
@@ -177,7 +221,6 @@ export default function WhatsApp() {
           </select>
         </div>
 
-        {/* Channel list */}
         <div className="flex-1 overflow-y-auto">
           {channels.map(channel => (
             <div
@@ -210,12 +253,8 @@ export default function WhatsApp() {
       {/* Chat area */}
       {selectedChannel && (
         <div className={`${!showSidebar || !isMobile ? 'flex' : 'hidden'} flex-1 flex flex-col`}>
-          {/* Chat header */}
           <div className="bg-whatsapp-dark text-white p-3 flex items-center gap-3">
-            <button 
-              onClick={() => setShowSidebar(true)}
-              className="md:hidden p-1"
-            >
+            <button onClick={() => setShowSidebar(true)} className="md:hidden p-1">
               <ArrowLeft size={24} />
             </button>
             <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold ${
@@ -224,13 +263,14 @@ export default function WhatsApp() {
             }`}>
               {selectedChannel.name.charAt(0)}
             </div>
-            <div>
+            <div className="flex-1">
               <p className="font-semibold">{selectedChannel.name}</p>
-              <p className="text-xs text-green-200">Polling cada 5s</p>
+              <p className="text-xs text-green-200 flex items-center gap-1">
+                {connected ? <><Wifi size={12} /> Conectado (tiempo real)</> : <><WifiOff size={12} /> Reconectando...</>}
+              </p>
             </div>
           </div>
 
-          {/* Messages */}
           <div 
             className="flex-1 overflow-y-auto p-4 space-y-2 scrollbar-hide"
             style={{ backgroundImage: "url('data:image/svg+xml,%3Csvg width=\"60\" height=\"60\" viewBox=\"0 0 60 60\" xmlns=\"http://www.w3.org/2000/svg\"%3E%3Cg fill=\"none\" fill-rule=\"evenodd\"%3E%3Cg fill=\"%23d5dbd6\" fill-opacity=\"0.4\"%3E%3Cpath d=\"M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')" }}
@@ -241,16 +281,13 @@ export default function WhatsApp() {
               </div>
             ) : (
               messages.map(msg => (
-                <div
-                  key={msg.id}
-                  className={`flex ${msg.sender === 'humano' ? 'justify-end' : 'justify-start'}`}
-                >
+                <div key={msg.id} className={`flex ${msg.sender === 'humano' || msg.sender === 'human' ? 'justify-end' : 'justify-start'}`}>
                   <div className={`max-w-[80%] md:max-w-[60%] rounded-lg p-3 shadow ${
-                    msg.sender === 'humano' 
+                    msg.sender === 'humano' || msg.sender === 'human'
                       ? 'bg-whatsapp-sent rounded-tr-none' 
                       : 'bg-white rounded-tl-none'
                   }`}>
-                    {msg.sender !== 'humano' && (
+                    {msg.sender !== 'humano' && msg.sender !== 'human' && (
                       <p className={`text-xs font-semibold mb-1 ${
                         msg.sender === 'ia' ? 'text-purple-600' :
                         msg.sender === 'cd6' ? 'text-blue-600' : 'text-green-600'
@@ -260,7 +297,6 @@ export default function WhatsApp() {
                       </p>
                     )}
                     
-                    {/* Attachments */}
                     {msg.attachments && msg.attachments.length > 0 && (
                       <div className="mb-2 space-y-2">
                         {msg.attachments.map((att, i) => (
@@ -273,11 +309,7 @@ export default function WhatsApp() {
                                 onClick={() => window.open(att.url, '_blank')}
                               />
                             ) : (
-                              <a 
-                                href={att.url} 
-                                target="_blank"
-                                className="flex items-center gap-2 p-2 bg-gray-100 rounded hover:bg-gray-200"
-                              >
+                              <a href={att.url} target="_blank" className="flex items-center gap-2 p-2 bg-gray-100 rounded hover:bg-gray-200">
                                 <File size={20} />
                                 <span className="text-sm truncate">{att.filename}</span>
                               </a>
@@ -288,9 +320,7 @@ export default function WhatsApp() {
                     )}
                     
                     <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>
-                    <p className="text-[10px] text-gray-500 text-right mt-1">
-                      {formatTime(msg.created_at)}
-                    </p>
+                    <p className="text-[10px] text-gray-500 text-right mt-1">{formatTime(msg.created_at)}</p>
                   </div>
                 </div>
               ))
@@ -298,23 +328,17 @@ export default function WhatsApp() {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Pending files preview */}
           {pendingFiles.length > 0 && (
             <div className="bg-gray-100 p-2 flex gap-2 overflow-x-auto">
               {pendingFiles.map((file, i) => (
                 <div key={i} className="relative bg-white rounded p-2 min-w-[100px]">
-                  <button 
-                    onClick={() => removePendingFile(i)}
-                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1"
-                  >
+                  <button onClick={() => removePendingFile(i)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1">
                     <X size={12} />
                   </button>
                   {isImage(file.type) ? (
                     <img src={file.url} alt="" className="w-20 h-20 object-cover rounded" />
                   ) : (
-                    <div className="w-20 h-20 flex items-center justify-center">
-                      <File size={32} className="text-gray-400" />
-                    </div>
+                    <div className="w-20 h-20 flex items-center justify-center"><File size={32} className="text-gray-400" /></div>
                   )}
                   <p className="text-[10px] truncate mt-1">{file.filename}</p>
                 </div>
@@ -322,43 +346,23 @@ export default function WhatsApp() {
             </div>
           )}
 
-          {/* Input bar */}
           <div className="bg-whatsapp-input p-3 flex items-end gap-2">
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileUpload}
-              multiple
-              className="hidden"
-            />
-            <button 
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
-              className="p-2 text-gray-600 hover:text-whatsapp-dark disabled:opacity-50"
-            >
+            <input type="file" ref={fileInputRef} onChange={handleFileUpload} multiple className="hidden" />
+            <button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="p-2 text-gray-600 hover:text-whatsapp-dark disabled:opacity-50">
               {uploading ? <Loader2 className="animate-spin" size={24} /> : <Paperclip size={24} />}
             </button>
             
             <textarea
               value={newMessage}
               onChange={e => setNewMessage(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault()
-                  handleSend()
-                }
-              }}
+              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }}}
               placeholder="Escribe un mensaje..."
               rows={1}
               className="flex-1 p-3 rounded-full border-none outline-none resize-none max-h-32"
               style={{ minHeight: '44px' }}
             />
             
-            <button
-              onClick={handleSend}
-              disabled={loading || (!newMessage.trim() && pendingFiles.length === 0)}
-              className="bg-whatsapp-dark text-white p-3 rounded-full disabled:opacity-50 hover:bg-opacity-90"
-            >
+            <button onClick={handleSend} disabled={loading || (!newMessage.trim() && pendingFiles.length === 0)} className="bg-whatsapp-dark text-white p-3 rounded-full disabled:opacity-50 hover:bg-opacity-90">
               {loading ? <Loader2 className="animate-spin" size={20} /> : <Send size={20} />}
             </button>
           </div>
