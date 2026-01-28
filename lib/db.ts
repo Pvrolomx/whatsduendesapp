@@ -2,7 +2,6 @@ import { sql } from '@vercel/postgres'
 
 export async function initDatabase() {
   try {
-    // Create tables if not exist
     await sql`
       CREATE TABLE IF NOT EXISTS channels (
         id SERIAL PRIMARY KEY,
@@ -19,8 +18,19 @@ export async function initDatabase() {
         sender VARCHAR(50) NOT NULL,
         content TEXT NOT NULL,
         attachments JSONB DEFAULT '[]',
+        read_at TIMESTAMP DEFAULT NULL,
         created_at TIMESTAMP DEFAULT NOW()
       )
+    `
+    
+    // Add read_at column if not exists
+    await sql`
+      DO $$ 
+      BEGIN 
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='messages' AND column_name='read_at') THEN
+          ALTER TABLE messages ADD COLUMN read_at TIMESTAMP DEFAULT NULL;
+        END IF;
+      END $$
     `
     
     await sql`
@@ -35,11 +45,9 @@ export async function initDatabase() {
       )
     `
     
-    // Create indexes
     await sql`CREATE INDEX IF NOT EXISTS idx_messages_channel ON messages(channel_id)`
     await sql`CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at DESC)`
     
-    // Insert default channels if empty
     const { rows } = await sql`SELECT COUNT(*) as count FROM channels`
     if (rows[0].count === '0') {
       await sql`INSERT INTO channels (name, description) VALUES ('General', 'Canal general')`
@@ -76,4 +84,16 @@ export async function createMessage(channelId: number, sender: string, content: 
     RETURNING *
   `
   return rows[0]
+}
+
+export async function markAsRead(channelId: number, reader: string) {
+  // Mark all unread messages NOT from the reader as read
+  await sql`
+    UPDATE messages 
+    SET read_at = NOW() 
+    WHERE channel_id = ${channelId} 
+    AND sender != ${reader}
+    AND read_at IS NULL
+  `
+  return { success: true }
 }
