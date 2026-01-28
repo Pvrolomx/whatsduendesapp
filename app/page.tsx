@@ -1,15 +1,13 @@
 'use client'
-// Build: 1769568122
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Send, Paperclip, ArrowLeft, File, X, Loader2, MessageCircle, Wifi, WifiOff, CheckCheck } from 'lucide-react'
+import { Send, Paperclip, ArrowLeft, File, X, Loader2, MessageCircle, Wifi, WifiOff, CheckCheck, Image } from 'lucide-react'
 
 interface Channel { id: number; name: string; description?: string }
 interface Message { id: number; channel_id: number; sender: string; content: string; attachments: Attachment[]; created_at: string; read_at: string | null }
 interface Attachment { url: string; filename: string; type: string; size: number }
 
 const AVATARS: Record<string, string> = {
-  cd6: 'https://q3kmdq0bwilkumjv.public.blob.vercel-storage.com/cd6-avatar-dj1T0G53BN2rXQGtpAnGZJBDbxqrl9.png',
   cd7: 'https://q3kmdq0bwilkumjv.public.blob.vercel-storage.com/cd7-avatar-EHTr0BokQe7RGySGt5YLuzgolBJRKh.png',
 }
 
@@ -26,9 +24,11 @@ export default function WhatsApp() {
   const [dbInitialized, setDbInitialized] = useState(false)
   const [connected, setConnected] = useState(false)
   const [connectionStatus, setConnectionStatus] = useState('Conectando...')
+  const [isDragging, setIsDragging] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const eventSourceRef = useRef<EventSource | null>(null)
+  const chatAreaRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     fetch('/api/init').then(r => r.json()).then(() => { setDbInitialized(true); loadChannels() }).catch(console.error)
@@ -82,6 +82,68 @@ export default function WhatsApp() {
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
+  // Upload file helper
+  const uploadFile = async (file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const res = await fetch('/api/upload', { method: 'POST', body: formData })
+    const data = await res.json()
+    if (data.url) {
+      return { url: data.url, filename: data.filename || file.name, type: data.type || file.type, size: data.size || file.size }
+    }
+    return null
+  }
+
+  // Handle paste (Ctrl+V)
+  useEffect(() => {
+    const handlePaste = async (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items
+      if (!items) return
+      
+      for (const item of Array.from(items)) {
+        if (item.type.startsWith('image/') || item.kind === 'file') {
+          const file = item.getAsFile()
+          if (file) {
+            e.preventDefault()
+            setUploading(true)
+            const uploaded = await uploadFile(file)
+            if (uploaded) setPendingFiles(prev => [...prev, uploaded])
+            setUploading(false)
+          }
+        }
+      }
+    }
+    
+    document.addEventListener('paste', handlePaste)
+    return () => document.removeEventListener('paste', handlePaste)
+  }, [])
+
+  // Handle drag and drop
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(true)
+  }
+  
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(false)
+  }
+  
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(false)
+    
+    const files = e.dataTransfer.files
+    if (files.length === 0) return
+    
+    setUploading(true)
+    for (const file of Array.from(files)) {
+      const uploaded = await uploadFile(file)
+      if (uploaded) setPendingFiles(prev => [...prev, uploaded])
+    }
+    setUploading(false)
+  }
+
   const handleSend = async () => {
     if ((!newMessage.trim() && pendingFiles.length === 0) || !selectedChannel) return
     setLoading(true)
@@ -103,13 +165,8 @@ export default function WhatsApp() {
     if (!files) return
     setUploading(true)
     for (const file of Array.from(files)) {
-      try {
-        const formData = new FormData()
-        formData.append('file', file)
-        const res = await fetch('/api/upload', { method: 'POST', body: formData })
-        const data = await res.json()
-        if (data.url) setPendingFiles(prev => [...prev, { url: data.url, filename: data.filename, type: data.type, size: data.size }])
-      } catch (error) { console.error('Upload error:', error) }
+      const uploaded = await uploadFile(file)
+      if (uploaded) setPendingFiles(prev => [...prev, uploaded])
     }
     setUploading(false)
     if (fileInputRef.current) fileInputRef.current.value = ''
@@ -120,25 +177,12 @@ export default function WhatsApp() {
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
   const isOwnMessage = (s: string) => s === 'humano' || s === 'human'
 
-  const renderAvatar = (sender: string, size: string = 'w-10 h-10') => {
-    if (AVATARS[sender]) {
-      return <img src={AVATARS[sender]} alt={sender} className={`${size} rounded-full object-cover`} />
+  const renderAvatar = (senderName: string, size: string = 'w-10 h-10') => {
+    if (AVATARS[senderName]) {
+      return <img src={AVATARS[senderName]} alt={senderName} className={`${size} rounded-full object-cover`} />
     }
-    const colors: Record<string, string> = {
-      'General': 'bg-blue-500',
-      'CD6': 'bg-purple-500',
-      'CD7': 'bg-green-500',
-      'cd6': 'bg-purple-500',
-      'cd7': 'bg-green-500',
-      'ia': 'bg-purple-500',
-      'humano': 'bg-gray-500',
-      'human': 'bg-gray-500',
-    }
-    return (
-      <div className={`${size} rounded-full flex items-center justify-center text-white font-bold ${colors[sender] || 'bg-gray-500'}`}>
-        {sender.charAt(0).toUpperCase()}
-      </div>
-    )
+    const colors: Record<string, string> = { 'General': 'bg-blue-500', 'CD6': 'bg-purple-500', 'CD7': 'bg-green-500', 'cd6': 'bg-purple-500', 'cd7': 'bg-green-500', 'ia': 'bg-purple-500' }
+    return <div className={`${size} rounded-full flex items-center justify-center text-white font-bold ${colors[senderName] || 'bg-gray-500'}`}>{senderName.charAt(0).toUpperCase()}</div>
   }
 
   return (
@@ -180,32 +224,37 @@ export default function WhatsApp() {
 
       {/* Chat */}
       {selectedChannel && (
-        <div className={`${!showSidebar || !isMobile ? 'flex' : 'hidden'} flex-1 flex flex-col`}>
+        <div className={`${!showSidebar || !isMobile ? 'flex' : 'hidden'} flex-1 flex flex-col`}
+          onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
           <div className="bg-[#075E54] text-white p-3 flex items-center gap-3">
             <button onClick={() => setShowSidebar(true)} className="md:hidden p-1"><ArrowLeft size={24} /></button>
             {renderAvatar(selectedChannel.name)}
             <div className="flex-1">
               <p className="font-semibold">{selectedChannel.name}</p>
               <p className="text-xs flex items-center gap-1">
-                {connected ? (
-                  <><Wifi size={12} className="text-green-300" /><span className="text-green-200">{connectionStatus}</span></>
-                ) : (
-                  <><WifiOff size={12} className="text-red-300" /><span className="text-red-200">{connectionStatus}</span></>
-                )}
+                {connected ? <><Wifi size={12} className="text-green-300" /><span className="text-green-200">{connectionStatus}</span></> : <><WifiOff size={12} className="text-red-300" /><span className="text-red-200">{connectionStatus}</span></>}
               </p>
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-3" style={{ backgroundImage: "url('data:image/svg+xml,%3Csvg width=\"60\" height=\"60\" viewBox=\"0 0 60 60\" xmlns=\"http://www.w3.org/2000/svg\"%3E%3Cg fill=\"none\" fill-rule=\"evenodd\"%3E%3Cg fill=\"%23d5dbd6\" fill-opacity=\"0.4\"%3E%3Cpath d=\"M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')" }}>
+          {/* Drag overlay */}
+          {isDragging && (
+            <div className="absolute inset-0 bg-green-500 bg-opacity-20 z-50 flex items-center justify-center border-4 border-dashed border-green-500 m-2 rounded-lg">
+              <div className="bg-white p-6 rounded-lg shadow-lg text-center">
+                <Image size={48} className="mx-auto text-green-500 mb-2" />
+                <p className="text-lg font-semibold">Suelta para subir</p>
+              </div>
+            </div>
+          )}
+
+          <div ref={chatAreaRef} className="flex-1 overflow-y-auto p-4 space-y-3 relative" style={{ backgroundImage: "url('data:image/svg+xml,%3Csvg width=\"60\" height=\"60\" viewBox=\"0 0 60 60\" xmlns=\"http://www.w3.org/2000/svg\"%3E%3Cg fill=\"none\" fill-rule=\"evenodd\"%3E%3Cg fill=\"%23d5dbd6\" fill-opacity=\"0.4\"%3E%3Cpath d=\"M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')" }}>
             {messages.length === 0 ? (
               <div className="flex items-center justify-center h-full text-gray-500"><p>No hay mensajes aún</p></div>
             ) : (
               messages.map(msg => (
                 <div key={msg.id} className={`flex gap-2 ${isOwnMessage(msg.sender) ? 'justify-end' : 'justify-start'}`}>
                   {!isOwnMessage(msg.sender) && renderAvatar(msg.sender, 'w-8 h-8 flex-shrink-0')}
-                  <div className={`max-w-[75%] md:max-w-[55%] rounded-lg p-3 shadow ${
-                    isOwnMessage(msg.sender) ? 'bg-[#DCF8C6] rounded-tr-none' : 'bg-white rounded-tl-none'}`}
-                    style={{ overflowWrap: 'break-word', wordBreak: 'break-word' }}>
+                  <div className={`max-w-[75%] md:max-w-[55%] rounded-lg p-3 shadow ${isOwnMessage(msg.sender) ? 'bg-[#DCF8C6] rounded-tr-none' : 'bg-white rounded-tl-none'}`} style={{ overflowWrap: 'break-word', wordBreak: 'break-word' }}>
                     {!isOwnMessage(msg.sender) && (
                       <p className={`text-xs font-semibold mb-1 ${msg.sender === 'ia' ? 'text-purple-600' : msg.sender === 'cd6' ? 'text-blue-600' : 'text-green-600'}`}>
                         {msg.sender === 'ia' ? '🤖 IA' : msg.sender === 'cd6' ? '🔵 CD6' : '🟢 CD7'}
@@ -229,13 +278,7 @@ export default function WhatsApp() {
                     <p className="text-sm whitespace-pre-wrap" style={{ overflowWrap: 'break-word', wordBreak: 'break-word' }}>{msg.content}</p>
                     <div className="flex items-center justify-end gap-1 mt-1">
                       <span className="text-[10px] text-gray-500">{formatTime(msg.created_at)}</span>
-                      {isOwnMessage(msg.sender) && (
-                        msg.read_at !== null && msg.read_at !== undefined ? (
-                          <CheckCheck size={14} className="text-blue-500" />
-                        ) : (
-                          <CheckCheck size={14} className="text-gray-400" />
-                        )
-                      )}
+                      {isOwnMessage(msg.sender) && (msg.read_at ? <CheckCheck size={14} className="text-blue-500" /> : <CheckCheck size={14} className="text-gray-400" />)}
                     </div>
                   </div>
                 </div>
@@ -257,13 +300,13 @@ export default function WhatsApp() {
           )}
 
           <div className="bg-[#F0F0F0] p-3 flex items-end gap-2">
-            <input type="file" ref={fileInputRef} onChange={handleFileUpload} multiple className="hidden" />
+            <input type="file" ref={fileInputRef} onChange={handleFileUpload} multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt" className="hidden" />
             <button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="p-2 text-gray-600 hover:text-[#075E54] disabled:opacity-50">
               {uploading ? <Loader2 className="animate-spin" size={24} /> : <Paperclip size={24} />}
             </button>
             <textarea value={newMessage} onChange={e => setNewMessage(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }}}
-              placeholder="Escribe un mensaje..." rows={1} className="flex-1 p-3 rounded-full border-none outline-none resize-none max-h-32" style={{ minHeight: '44px' }} />
+              placeholder="Escribe un mensaje... (Ctrl+V para pegar imagen)" rows={1} className="flex-1 p-3 rounded-full border-none outline-none resize-none max-h-32" style={{ minHeight: '44px' }} />
             <button onClick={handleSend} disabled={loading || (!newMessage.trim() && pendingFiles.length === 0)} className="bg-[#075E54] text-white p-3 rounded-full disabled:opacity-50">
               {loading ? <Loader2 className="animate-spin" size={20} /> : <Send size={20} />}
             </button>
