@@ -105,7 +105,16 @@ export default function WhatsApp() {
     }
   }, [selectedChannel, dbInitialized, loadMessages])
 
-  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
+  useEffect(() => {
+    // Solo auto-scroll si el usuario está cerca del final (dentro de 200px)
+    const container = messagesEndRef.current?.parentElement
+    if (container) {
+      const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 200
+      if (isNearBottom) {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+      }
+    }
+  }, [messages])
 
   // Polling siempre activo cada 3 segundos (backup para SSE)
   useEffect(() => {
