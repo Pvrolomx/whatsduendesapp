@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Send, Paperclip, ArrowLeft, File, X, Loader2, MessageCircle, Wifi, WifiOff, CheckCheck, Image } from 'lucide-react'
+import { Send, Paperclip, ArrowLeft, File, X, Loader2, MessageCircle, Wifi, WifiOff, CheckCheck, Image, Trash2 } from 'lucide-react'
 
 interface Channel { id: number; name: string; description?: string }
 interface Message { id: number; channel_id: number; sender: string; content: string; attachments: Attachment[]; created_at: string; read_at: string | null }
@@ -25,6 +25,7 @@ export default function WhatsApp() {
   const [connected, setConnected] = useState(false)
   const [connectionStatus, setConnectionStatus] = useState('Conectando...')
   const [isDragging, setIsDragging] = useState(false)
+  const [selectedMessage, setSelectedMessage] = useState<number | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const eventSourceRef = useRef<EventSource | null>(null)
@@ -47,7 +48,7 @@ export default function WhatsApp() {
     try {
       const res = await fetch(`/api/messages?channel=${selectedChannel.id}&limit=100`)
       const data = await res.json()
-      setMessages(Array.isArray(data) ? data : [])
+      if (Array.isArray(data)) setMessages(data)
     } catch (error) { console.error('Error:', error) }
   }, [selectedChannel])
 
@@ -86,9 +87,7 @@ export default function WhatsApp() {
     formData.append('file', file)
     const res = await fetch('/api/upload', { method: 'POST', body: formData })
     const data = await res.json()
-    if (data.url) {
-      return { url: data.url, filename: data.filename || file.name, type: data.type || file.type, size: data.size || file.size }
-    }
+    if (data.url) return { url: data.url, filename: data.filename || file.name, type: data.type || file.type, size: data.size || file.size }
     return null
   }
 
@@ -131,10 +130,22 @@ export default function WhatsApp() {
   const handleSend = async () => {
     if ((!newMessage.trim() && pendingFiles.length === 0) || !selectedChannel) return
     
-    const messageContent = newMessage.trim() || (pendingFiles.length > 0 ? '📎 Archivo' : '')
-    const messageAttachments = [...pendingFiles]
+    const msgContent = newMessage.trim() || '📎 Archivo'
+    const msgAttachments = [...pendingFiles]
+    const tempId = -Date.now() // ID temporal negativo
     
-    // Clear input immediately
+    // Optimistic: agregar mensaje inmediatamente
+    const tempMsg: Message = {
+      id: tempId,
+      channel_id: selectedChannel.id,
+      sender,
+      content: msgContent,
+      attachments: msgAttachments,
+      created_at: new Date().toISOString(),
+      read_at: null
+    }
+    
+    setMessages(prev => [...prev, tempMsg])
     setNewMessage('')
     setPendingFiles([])
     setLoading(true)
@@ -143,29 +154,41 @@ export default function WhatsApp() {
       const res = await fetch('/api/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          channel_id: selectedChannel.id, 
-          sender, 
-          content: messageContent, 
-          attachments: messageAttachments 
-        })
+        body: JSON.stringify({ channel_id: selectedChannel.id, sender, content: msgContent, attachments: msgAttachments })
       })
-      const newMsg = await res.json()
+      const realMsg = await res.json()
       
-      // Add message to list immediately (optimistic update)
-      if (newMsg.id) {
-        setMessages(prev => {
-          if (prev.find(m => m.id === newMsg.id)) return prev
-          return [...prev, newMsg]
-        })
+      // Reemplazar mensaje temporal con el real
+      if (realMsg.id) {
+        setMessages(prev => prev.map(m => m.id === tempId ? realMsg : m))
       }
     } catch (error) { 
       console.error('Error:', error)
-      // Restore message on error
-      setNewMessage(messageContent)
-      setPendingFiles(messageAttachments)
+      // Quitar mensaje temporal en error
+      setMessages(prev => prev.filter(m => m.id !== tempId))
+      setNewMessage(msgContent)
+      setPendingFiles(msgAttachments)
     }
     setLoading(false)
+  }
+
+  const handleDelete = async (msgId: number) => {
+    if (!confirm('¿Eliminar este mensaje?')) return
+    
+    // Optimistic delete
+    setMessages(prev => prev.filter(m => m.id !== msgId))
+    setSelectedMessage(null)
+    
+    try {
+      await fetch('/api/messages/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: msgId })
+      })
+    } catch (error) {
+      console.error('Error deleting:', error)
+      loadMessages() // Reload on error
+    }
   }
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -187,15 +210,13 @@ export default function WhatsApp() {
 
   const renderAvatar = (senderName: string, size: string = 'w-10 h-10') => {
     const avatarUrl = AVATARS[senderName]
-    if (avatarUrl) {
-      return <img src={avatarUrl} alt={senderName} className={`${size} rounded-full object-cover`} />
-    }
+    if (avatarUrl) return <img src={avatarUrl} alt={senderName} className={`${size} rounded-full object-cover`} />
     const colors: Record<string, string> = { 'General': 'bg-blue-500', 'CD6': 'bg-purple-500', 'CD7': 'bg-green-500', 'cd6': 'bg-purple-500', 'cd7': 'bg-green-500', 'ia': 'bg-purple-500' }
     return <div className={`${size} rounded-full flex items-center justify-center text-white font-bold ${colors[senderName] || 'bg-gray-500'}`}>{senderName.charAt(0).toUpperCase()}</div>
   }
 
   return (
-    <div className="h-screen flex bg-[#ECE5DD]">
+    <div className="h-screen flex bg-[#ECE5DD]" onClick={() => setSelectedMessage(null)}>
       <div className={`${showSidebar || !selectedChannel ? 'flex' : 'hidden'} md:flex flex-col w-full md:w-80 bg-white border-r`}>
         <div className="bg-[#075E54] text-white p-4 flex items-center gap-3">
           <MessageCircle size={28} />
@@ -220,10 +241,7 @@ export default function WhatsApp() {
               className={`p-4 border-b cursor-pointer hover:bg-gray-50 ${selectedChannel?.id === channel.id ? 'bg-green-50' : ''}`}>
               <div className="flex items-center gap-3">
                 {renderAvatar(channel.name, 'w-12 h-12')}
-                <div>
-                  <p className="font-semibold">{channel.name}</p>
-                  <p className="text-sm text-gray-500">{channel.description || 'Canal'}</p>
-                </div>
+                <div><p className="font-semibold">{channel.name}</p><p className="text-sm text-gray-500">{channel.description || 'Canal'}</p></div>
               </div>
             </div>
           ))}
@@ -246,10 +264,7 @@ export default function WhatsApp() {
 
           {isDragging && (
             <div className="absolute inset-0 bg-green-500 bg-opacity-20 z-50 flex items-center justify-center border-4 border-dashed border-green-500 m-2 rounded-lg">
-              <div className="bg-white p-6 rounded-lg shadow-lg text-center">
-                <Image size={48} className="mx-auto text-green-500 mb-2" />
-                <p className="text-lg font-semibold">Suelta para subir</p>
-              </div>
+              <div className="bg-white p-6 rounded-lg shadow-lg text-center"><Image size={48} className="mx-auto text-green-500 mb-2" /><p className="text-lg font-semibold">Suelta para subir</p></div>
             </div>
           )}
 
@@ -260,7 +275,21 @@ export default function WhatsApp() {
               messages.map(msg => (
                 <div key={msg.id} className={`flex gap-2 ${isOwnMessage(msg.sender) ? 'justify-end' : 'justify-start'}`}>
                   {!isOwnMessage(msg.sender) && renderAvatar(msg.sender, 'w-8 h-8 flex-shrink-0')}
-                  <div className={`max-w-[75%] md:max-w-[55%] rounded-lg p-3 shadow ${isOwnMessage(msg.sender) ? 'bg-[#DCF8C6] rounded-tr-none' : 'bg-white rounded-tl-none'}`} style={{ overflowWrap: 'break-word', wordBreak: 'break-word' }}>
+                  <div 
+                    className={`relative max-w-[75%] md:max-w-[55%] rounded-lg p-3 shadow ${isOwnMessage(msg.sender) ? 'bg-[#DCF8C6] rounded-tr-none' : 'bg-white rounded-tl-none'} ${msg.id < 0 ? 'opacity-70' : ''}`} 
+                    style={{ overflowWrap: 'break-word', wordBreak: 'break-word' }}
+                    onClick={(e) => { e.stopPropagation(); setSelectedMessage(selectedMessage === msg.id ? null : msg.id) }}
+                  >
+                    {/* Delete button */}
+                    {selectedMessage === msg.id && msg.id > 0 && (
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); handleDelete(msg.id) }}
+                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1.5 shadow-lg hover:bg-red-600"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                    
                     {!isOwnMessage(msg.sender) && (
                       <p className={`text-xs font-semibold mb-1 ${msg.sender === 'ia' ? 'text-purple-600' : msg.sender === 'cd6' ? 'text-blue-600' : 'text-green-600'}`}>
                         {msg.sender === 'ia' ? '🤖 IA' : msg.sender === 'cd6' ? '🔵 CD6' : '🟢 CD7'}
@@ -281,7 +310,7 @@ export default function WhatsApp() {
                         ))}
                       </div>
                     )}
-                    <p className="text-sm whitespace-pre-wrap" style={{ overflowWrap: 'break-word', wordBreak: 'break-word' }}>{msg.content}</p>
+                    <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
                     <div className="flex items-center justify-end gap-1 mt-1">
                       <span className="text-[10px] text-gray-500">{formatTime(msg.created_at)}</span>
                       {isOwnMessage(msg.sender) && (msg.read_at ? <CheckCheck size={14} className="text-blue-500" /> : <CheckCheck size={14} className="text-gray-400" />)}
@@ -312,7 +341,7 @@ export default function WhatsApp() {
             </button>
             <textarea value={newMessage} onChange={e => setNewMessage(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }}}
-              placeholder="Escribe... (Ctrl+V pegar, arrastra archivos)" rows={1} className="flex-1 p-3 rounded-full border-none outline-none resize-none max-h-32" style={{ minHeight: '44px' }} />
+              placeholder="Escribe un mensaje..." rows={1} className="flex-1 p-3 rounded-full border-none outline-none resize-none max-h-32" style={{ minHeight: '44px' }} />
             <button onClick={handleSend} disabled={loading || (!newMessage.trim() && pendingFiles.length === 0)} className="bg-[#075E54] text-white p-3 rounded-full disabled:opacity-50">
               {loading ? <Loader2 className="animate-spin" size={20} /> : <Send size={20} />}
             </button>
