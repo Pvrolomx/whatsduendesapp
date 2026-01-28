@@ -211,7 +211,7 @@ export default function WhatsApp() {
   const renderAvatar = (senderName: string, size: string = 'w-10 h-10') => {
     const avatarUrl = AVATARS[senderName]
     if (avatarUrl) return <img src={avatarUrl} alt={senderName} className={`${size} rounded-full object-cover`} />
-    const colors: Record<string, string> = { 'General': 'bg-blue-500', 'CD6': 'bg-purple-500', 'CD7': 'bg-green-500', 'cd6': 'bg-purple-500', 'cd7': 'bg-green-500', 'ia': 'bg-purple-500' }
+    const colors: Record<string, string> = { 'General': 'bg-blue-500', 'CD6': 'bg-purple-500', 'CD7': 'bg-green-500', 'cd6': 'bg-purple-500', 'cd5': 'bg-orange-500', 'cd7': 'bg-green-500', 'ia': 'bg-purple-500' }
     return <div className={`${size} rounded-full flex items-center justify-center text-white font-bold ${colors[senderName] || 'bg-gray-500'}`}>{senderName.charAt(0).toUpperCase()}</div>
   }
 
@@ -231,6 +231,7 @@ export default function WhatsApp() {
             <option value="humano">👤 Humano</option>
             <option value="ia">🤖 IA</option>
             <option value="cd6">🔵 CD6</option>
+            <option value="cd5">🟠 CD5</option>
             <option value="cd7">🟢 CD7</option>
           </select>
         </div>
@@ -292,7 +293,7 @@ export default function WhatsApp() {
                     
                     {!isOwnMessage(msg.sender) && (
                       <p className={`text-xs font-semibold mb-1 ${msg.sender === 'ia' ? 'text-purple-600' : msg.sender === 'cd6' ? 'text-blue-600' : 'text-green-600'}`}>
-                        {msg.sender === 'ia' ? '🤖 IA' : msg.sender === 'cd6' ? '🔵 CD6' : '🟢 CD7'}
+                        {msg.sender === 'ia' ? '🤖 IA' : msg.sender === 'cd5' ? '🟠 CD5' : msg.sender === 'cd6' ? '🔵 CD6' : '🟢 CD7'}
                       </p>
                     )}
                     {msg.attachments?.length > 0 && (
