@@ -56,11 +56,11 @@ export default function WhatsApp() {
     const eventSource = new EventSource(`/api/subscribe?channel=${selectedChannel.id}`)
     eventSourceRef.current = eventSource
 
-    eventSource.onopen = () => { setConnected(true); setConnectionStatus('🟢 Tiempo real') }
+    eventSource.onopen = () => { setConnected(true); setConnectionStatus('Tiempo real') }
     eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data)
-        if (data.type === 'connected') { setConnected(true); setConnectionStatus('🟢 Tiempo real') }
+        if (data.type === 'connected') { setConnected(true); setConnectionStatus('Tiempo real') }
         else if (data.type === 'message') {
           setMessages(prev => {
             if (prev.find(m => m.id === data.data.id)) return prev
@@ -69,7 +69,7 @@ export default function WhatsApp() {
         }
       } catch (e) { console.error('SSE error:', e) }
     }
-    eventSource.onerror = () => { setConnected(false); setConnectionStatus('🔴 Reconectando...') }
+    eventSource.onerror = () => { setConnected(false); setConnectionStatus('Reconectando...') }
 
     return () => { eventSource.close(); setConnected(false) }
   }, [selectedChannel, dbInitialized, loadMessages])
@@ -166,8 +166,11 @@ export default function WhatsApp() {
             <div className="flex-1">
               <p className="font-semibold">{selectedChannel.name}</p>
               <p className="text-xs flex items-center gap-1">
-                {connected ? <Wifi size={12} className="text-green-300" /> : <WifiOff size={12} className="text-red-300" />}
-                <span className={connected ? 'text-green-200' : 'text-red-200'}>{connectionStatus}</span>
+                {connected ? (
+                  <><Wifi size={12} className="text-green-300" /><span className="text-green-200">{connectionStatus}</span></>
+                ) : (
+                  <><WifiOff size={12} className="text-red-300" /><span className="text-red-200">{connectionStatus}</span></>
+                )}
               </p>
             </div>
           </div>
@@ -205,9 +208,11 @@ export default function WhatsApp() {
                     <div className="flex items-center justify-end gap-1 mt-1">
                       <span className="text-[10px] text-gray-500">{formatTime(msg.created_at)}</span>
                       {isOwnMessage(msg.sender) && (
-                        <span className={msg.read_at ? 'text-blue-500' : 'text-gray-400'}>
-                          <CheckCheck size={14} />
-                        </span>
+                        msg.read_at !== null && msg.read_at !== undefined ? (
+                          <CheckCheck size={14} className="text-blue-500" />
+                        ) : (
+                          <CheckCheck size={14} className="text-gray-400" />
+                        )
                       )}
                     </div>
                   </div>
