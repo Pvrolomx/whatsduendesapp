@@ -1,10 +1,10 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Send, Paperclip, ArrowLeft, File, X, Loader2, MessageCircle, Wifi, WifiOff } from 'lucide-react'
+import { Send, Paperclip, ArrowLeft, File, X, Loader2, MessageCircle, Wifi, WifiOff, Check, CheckCheck } from 'lucide-react'
 
 interface Channel { id: number; name: string; description?: string }
-interface Message { id: number; channel_id: number; sender: string; content: string; attachments: Attachment[]; created_at: string }
+interface Message { id: number; channel_id: number; sender: string; content: string; attachments: Attachment[]; created_at: string; read_at: string | null }
 interface Attachment { url: string; filename: string; type: string; size: number }
 
 export default function WhatsApp() {
@@ -56,32 +56,20 @@ export default function WhatsApp() {
     const eventSource = new EventSource(`/api/subscribe?channel=${selectedChannel.id}`)
     eventSourceRef.current = eventSource
 
-    eventSource.onopen = () => {
-      console.log('SSE connected')
-      setConnected(true)
-      setConnectionStatus('🟢 Conectado (tiempo real)')
-    }
-
+    eventSource.onopen = () => { setConnected(true); setConnectionStatus('🟢 Tiempo real') }
     eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data)
-        if (data.type === 'connected') {
-          setConnected(true)
-          setConnectionStatus('🟢 Conectado (tiempo real)')
-        } else if (data.type === 'message') {
+        if (data.type === 'connected') { setConnected(true); setConnectionStatus('🟢 Tiempo real') }
+        else if (data.type === 'message') {
           setMessages(prev => {
             if (prev.find(m => m.id === data.data.id)) return prev
             return [...prev, data.data]
           })
         }
-      } catch (e) { console.error('SSE parse error:', e) }
+      } catch (e) { console.error('SSE error:', e) }
     }
-
-    eventSource.onerror = (e) => {
-      console.log('SSE error', e)
-      setConnected(false)
-      setConnectionStatus('🔴 Reconectando...')
-    }
+    eventSource.onerror = () => { setConnected(false); setConnectionStatus('🔴 Reconectando...') }
 
     return () => { eventSource.close(); setConnected(false) }
   }, [selectedChannel, dbInitialized, loadMessages])
@@ -124,6 +112,7 @@ export default function WhatsApp() {
   const formatTime = (dateStr: string) => new Date(dateStr).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
   const isImage = (type: string) => type?.startsWith('image/')
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
+  const isOwnMessage = (s: string) => s === 'humano' || s === 'human'
 
   return (
     <div className="h-screen flex bg-[#ECE5DD]">
@@ -188,10 +177,11 @@ export default function WhatsApp() {
               <div className="flex items-center justify-center h-full text-gray-500"><p>No hay mensajes aún</p></div>
             ) : (
               messages.map(msg => (
-                <div key={msg.id} className={`flex ${msg.sender === 'humano' || msg.sender === 'human' ? 'justify-end' : 'justify-start'}`}>
+                <div key={msg.id} className={`flex ${isOwnMessage(msg.sender) ? 'justify-end' : 'justify-start'}`}>
                   <div className={`max-w-[80%] md:max-w-[60%] rounded-lg p-3 shadow ${
-                    msg.sender === 'humano' || msg.sender === 'human' ? 'bg-[#DCF8C6] rounded-tr-none' : 'bg-white rounded-tl-none'}`}>
-                    {msg.sender !== 'humano' && msg.sender !== 'human' && (
+                    isOwnMessage(msg.sender) ? 'bg-[#DCF8C6] rounded-tr-none' : 'bg-white rounded-tl-none'}`}
+                    style={{ overflowWrap: 'break-word', wordBreak: 'break-word' }}>
+                    {!isOwnMessage(msg.sender) && (
                       <p className={`text-xs font-semibold mb-1 ${msg.sender === 'ia' ? 'text-purple-600' : msg.sender === 'cd6' ? 'text-blue-600' : 'text-green-600'}`}>
                         {msg.sender === 'ia' ? '🤖 IA' : msg.sender === 'cd6' ? '🔵 CD6' : '🟢 CD7'}
                       </p>
@@ -204,15 +194,22 @@ export default function WhatsApp() {
                               <img src={att.url} alt={att.filename} className="max-w-full rounded cursor-pointer" onClick={() => window.open(att.url, '_blank')} />
                             ) : (
                               <a href={att.url} target="_blank" className="flex items-center gap-2 p-2 bg-gray-100 rounded hover:bg-gray-200">
-                                <File size={20} /><span className="text-sm truncate">{att.filename}</span>
+                                <File size={20} /><span className="text-sm truncate max-w-[200px]">{att.filename}</span>
                               </a>
                             )}
                           </div>
                         ))}
                       </div>
                     )}
-                    <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>
-                    <p className="text-[10px] text-gray-500 text-right mt-1">{formatTime(msg.created_at)}</p>
+                    <p className="text-sm whitespace-pre-wrap" style={{ overflowWrap: 'break-word', wordBreak: 'break-word' }}>{msg.content}</p>
+                    <div className="flex items-center justify-end gap-1 mt-1">
+                      <span className="text-[10px] text-gray-500">{formatTime(msg.created_at)}</span>
+                      {isOwnMessage(msg.sender) && (
+                        <span className={msg.read_at ? 'text-blue-500' : 'text-gray-400'}>
+                          <CheckCheck size={14} />
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))
