@@ -1,11 +1,15 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Send, Paperclip, ArrowLeft, File, X, Loader2, MessageCircle, Wifi, WifiOff, Check, CheckCheck } from 'lucide-react'
+import { Send, Paperclip, ArrowLeft, File, X, Loader2, MessageCircle, Wifi, WifiOff, CheckCheck } from 'lucide-react'
 
 interface Channel { id: number; name: string; description?: string }
 interface Message { id: number; channel_id: number; sender: string; content: string; attachments: Attachment[]; created_at: string; read_at: string | null }
 interface Attachment { url: string; filename: string; type: string; size: number }
+
+const AVATARS: Record<string, string> = {
+  cd7: 'https://q3kmdq0bwilkumjv.public.blob.vercel-storage.com/cd7-avatar-EHTr0BokQe7RGySGt5YLuzgolBJRKh.png',
+}
 
 export default function WhatsApp() {
   const [channels, setChannels] = useState<Channel[]>([])
@@ -114,6 +118,27 @@ export default function WhatsApp() {
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
   const isOwnMessage = (s: string) => s === 'humano' || s === 'human'
 
+  const renderAvatar = (sender: string, size: string = 'w-10 h-10') => {
+    if (AVATARS[sender]) {
+      return <img src={AVATARS[sender]} alt={sender} className={`${size} rounded-full object-cover`} />
+    }
+    const colors: Record<string, string> = {
+      'General': 'bg-blue-500',
+      'CD6': 'bg-purple-500',
+      'CD7': 'bg-green-500',
+      'cd6': 'bg-purple-500',
+      'cd7': 'bg-green-500',
+      'ia': 'bg-purple-500',
+      'humano': 'bg-gray-500',
+      'human': 'bg-gray-500',
+    }
+    return (
+      <div className={`${size} rounded-full flex items-center justify-center text-white font-bold ${colors[sender] || 'bg-gray-500'}`}>
+        {sender.charAt(0).toUpperCase()}
+      </div>
+    )
+  }
+
   return (
     <div className="h-screen flex bg-[#ECE5DD]">
       {/* Sidebar */}
@@ -140,10 +165,7 @@ export default function WhatsApp() {
             <div key={channel.id} onClick={() => { setSelectedChannel(channel); setShowSidebar(false) }}
               className={`p-4 border-b cursor-pointer hover:bg-gray-50 ${selectedChannel?.id === channel.id ? 'bg-green-50' : ''}`}>
               <div className="flex items-center gap-3">
-                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white text-lg font-bold ${
-                  channel.name === 'General' ? 'bg-blue-500' : channel.name === 'CD6' ? 'bg-purple-500' : 'bg-green-500'}`}>
-                  {channel.name.charAt(0)}
-                </div>
+                {renderAvatar(channel.name, 'w-12 h-12')}
                 <div>
                   <p className="font-semibold">{channel.name}</p>
                   <p className="text-sm text-gray-500">{channel.description || 'Canal'}</p>
@@ -159,10 +181,7 @@ export default function WhatsApp() {
         <div className={`${!showSidebar || !isMobile ? 'flex' : 'hidden'} flex-1 flex flex-col`}>
           <div className="bg-[#075E54] text-white p-3 flex items-center gap-3">
             <button onClick={() => setShowSidebar(true)} className="md:hidden p-1"><ArrowLeft size={24} /></button>
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold ${
-              selectedChannel.name === 'General' ? 'bg-blue-500' : selectedChannel.name === 'CD6' ? 'bg-purple-500' : 'bg-green-500'}`}>
-              {selectedChannel.name.charAt(0)}
-            </div>
+            {renderAvatar(selectedChannel.name)}
             <div className="flex-1">
               <p className="font-semibold">{selectedChannel.name}</p>
               <p className="text-xs flex items-center gap-1">
@@ -175,13 +194,14 @@ export default function WhatsApp() {
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-2" style={{ backgroundImage: "url('data:image/svg+xml,%3Csvg width=\"60\" height=\"60\" viewBox=\"0 0 60 60\" xmlns=\"http://www.w3.org/2000/svg\"%3E%3Cg fill=\"none\" fill-rule=\"evenodd\"%3E%3Cg fill=\"%23d5dbd6\" fill-opacity=\"0.4\"%3E%3Cpath d=\"M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')" }}>
+          <div className="flex-1 overflow-y-auto p-4 space-y-3" style={{ backgroundImage: "url('data:image/svg+xml,%3Csvg width=\"60\" height=\"60\" viewBox=\"0 0 60 60\" xmlns=\"http://www.w3.org/2000/svg\"%3E%3Cg fill=\"none\" fill-rule=\"evenodd\"%3E%3Cg fill=\"%23d5dbd6\" fill-opacity=\"0.4\"%3E%3Cpath d=\"M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')" }}>
             {messages.length === 0 ? (
               <div className="flex items-center justify-center h-full text-gray-500"><p>No hay mensajes aún</p></div>
             ) : (
               messages.map(msg => (
-                <div key={msg.id} className={`flex ${isOwnMessage(msg.sender) ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[80%] md:max-w-[60%] rounded-lg p-3 shadow ${
+                <div key={msg.id} className={`flex gap-2 ${isOwnMessage(msg.sender) ? 'justify-end' : 'justify-start'}`}>
+                  {!isOwnMessage(msg.sender) && renderAvatar(msg.sender, 'w-8 h-8 flex-shrink-0')}
+                  <div className={`max-w-[75%] md:max-w-[55%] rounded-lg p-3 shadow ${
                     isOwnMessage(msg.sender) ? 'bg-[#DCF8C6] rounded-tr-none' : 'bg-white rounded-tl-none'}`}
                     style={{ overflowWrap: 'break-word', wordBreak: 'break-word' }}>
                     {!isOwnMessage(msg.sender) && (
