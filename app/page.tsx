@@ -288,7 +288,7 @@ export default function WhatsApp() {
       {selectedChannel && (
         <div className={`${!showSidebar || !isMobile ? 'flex' : 'hidden'} flex-1 flex flex-col relative`}
           onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
-          <div className="bg-[#075E54] text-white p-3 flex items-center gap-3">
+          <div className="bg-[#075E54] text-white p-3 flex items-center gap-3 sticky top-0 z-10">
             <button onClick={() => setShowSidebar(true)} className="md:hidden p-1"><ArrowLeft size={24} /></button>
             {renderAvatar(selectedChannel.name)}
             <div className="flex-1">
