@@ -21,6 +21,6 @@
     "typescript": "^5",
     "tailwindcss": "^3.4.1",
     "postcss": "^8",
-    "autoprefixer": "^0.10.0"
+    "autoprefixer": "^10.0.0"
   }
 }
