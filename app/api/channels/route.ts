@@ -14,24 +14,23 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const { name, description } = await request.json()
+    const { name } = await request.json()
     
     if (!name) {
       return NextResponse.json({ error: 'Name required' }, { status: 400 })
     }
     
-    const { rows } = await sql`
-      INSERT INTO channels (name, description) 
-      VALUES (${name}, ${description || ''})
-      ON CONFLICT (name) DO NOTHING
-      RETURNING *
-    `
-    
-    if (rows.length === 0) {
-      // Channel already exists, get it
-      const existing = await sql`SELECT * FROM channels WHERE name = ${name}`
+    // Check if exists
+    const existing = await sql`SELECT * FROM channels WHERE name = ${name}`
+    if (existing.rows.length > 0) {
       return NextResponse.json(existing.rows[0])
     }
+    
+    const { rows } = await sql`
+      INSERT INTO channels (name) 
+      VALUES (${name})
+      RETURNING *
+    `
     
     return NextResponse.json(rows[0])
   } catch (error: any) {
