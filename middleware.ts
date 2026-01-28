@@ -3,29 +3,29 @@ import type { NextRequest } from 'next/server'
 
 const AUTH_COOKIE = 'whatsduendes_auth'
 
-// Rutas que no requieren autenticación
-const PUBLIC_PATHS = ['/login', '/api/auth']
-
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   
-  // Permitir rutas públicas
-  if (PUBLIC_PATHS.some(path => pathname.startsWith(path))) {
+  // Permitir todas las APIs sin autenticación
+  if (pathname.startsWith('/api')) {
+    return NextResponse.next()
+  }
+  
+  // Permitir login
+  if (pathname === '/login') {
     return NextResponse.next()
   }
   
   // Permitir assets estáticos
-  if (pathname.startsWith('/_next') || pathname.startsWith('/favicon')) {
+  if (pathname.startsWith('/_next') || pathname.includes('.')) {
     return NextResponse.next()
   }
   
-  // Verificar cookie de autenticación
+  // Verificar cookie de autenticación para páginas
   const authCookie = request.cookies.get(AUTH_COOKIE)
   
   if (!authCookie?.value) {
-    // Redirigir a login
-    const loginUrl = new URL('/login', request.url)
-    return NextResponse.redirect(loginUrl)
+    return NextResponse.redirect(new URL('/login', request.url))
   }
   
   return NextResponse.next()
