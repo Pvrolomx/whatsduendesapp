@@ -26,6 +26,7 @@ export default function WhatsApp() {
   const [connectionStatus, setConnectionStatus] = useState('Conectando...')
   const [isDragging, setIsDragging] = useState(false)
   const [selectedMessage, setSelectedMessage] = useState<number | null>(null)
+  const pollingRef = useRef<NodeJS.Timeout | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const eventSourceRef = useRef<EventSource | null>(null)
@@ -62,7 +63,15 @@ export default function WhatsApp() {
     const eventSource = new EventSource(`/api/subscribe?channel=${selectedChannel.id}`)
     eventSourceRef.current = eventSource
 
-    eventSource.onopen = () => { setConnected(true); setConnectionStatus('Tiempo real') }
+    eventSource.onopen = () => { 
+      setConnected(true)
+      setConnectionStatus('Tiempo real')
+      // Detener polling si estaba activo
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current)
+        pollingRef.current = null
+      }
+    }
     eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data)
@@ -75,9 +84,25 @@ export default function WhatsApp() {
         }
       } catch (e) { console.error('SSE error:', e) }
     }
-    eventSource.onerror = () => { setConnected(false); setConnectionStatus('Reconectando...') }
+    eventSource.onerror = () => { 
+      setConnected(false)
+      setConnectionStatus('Polling...')
+      // Iniciar polling fallback
+      if (!pollingRef.current) {
+        pollingRef.current = setInterval(() => {
+          loadMessages()
+        }, 3000)
+      }
+    }
 
-    return () => { eventSource.close(); setConnected(false) }
+    return () => { 
+      eventSource.close()
+      setConnected(false)
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current)
+        pollingRef.current = null
+      }
+    }
   }, [selectedChannel, dbInitialized, loadMessages])
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
