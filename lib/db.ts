@@ -33,6 +33,16 @@ export async function initDatabase() {
       END $$
     `
     
+    // Add dynamic_prompt column to channels if not exists
+    await sql`
+      DO $$ 
+      BEGIN 
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='channels' AND column_name='dynamic_prompt') THEN
+          ALTER TABLE channels ADD COLUMN dynamic_prompt TEXT DEFAULT NULL;
+        END IF;
+      END $$
+    `
+    
     await sql`
       CREATE TABLE IF NOT EXISTS files (
         id SERIAL PRIMARY KEY,

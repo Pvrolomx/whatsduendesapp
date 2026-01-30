@@ -37,3 +37,79 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
+
+export async function PUT(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const idParam = searchParams.get('id')
+    const body = await request.json()
+    
+    if (!idParam) {
+      return NextResponse.json({ error: 'Channel ID required in query param' }, { status: 400 })
+    }
+    
+    const channelId = parseInt(idParam)
+    const { name, description, dynamic_prompt } = body
+    
+    // Build dynamic update
+    const updates: string[] = []
+    const values: any[] = []
+    
+    if (name !== undefined) {
+      updates.push('name')
+      values.push(name)
+    }
+    if (description !== undefined) {
+      updates.push('description')
+      values.push(description)
+    }
+    if (dynamic_prompt !== undefined) {
+      updates.push('dynamic_prompt')
+      values.push(dynamic_prompt)
+    }
+    
+    if (updates.length === 0) {
+      return NextResponse.json({ error: 'No fields to update' }, { status: 400 })
+    }
+    
+    // Execute update based on what fields are provided
+    let result
+    if (dynamic_prompt !== undefined && updates.length === 1) {
+      result = await sql`
+        UPDATE channels 
+        SET dynamic_prompt = ${dynamic_prompt}
+        WHERE id = ${channelId}
+        RETURNING *
+      `
+    } else if (name !== undefined && dynamic_prompt !== undefined) {
+      result = await sql`
+        UPDATE channels 
+        SET name = ${name}, dynamic_prompt = ${dynamic_prompt}
+        WHERE id = ${channelId}
+        RETURNING *
+      `
+    } else if (name !== undefined) {
+      result = await sql`
+        UPDATE channels 
+        SET name = ${name}
+        WHERE id = ${channelId}
+        RETURNING *
+      `
+    } else {
+      result = await sql`
+        UPDATE channels 
+        SET dynamic_prompt = ${dynamic_prompt || null}
+        WHERE id = ${channelId}
+        RETURNING *
+      `
+    }
+    
+    if (result.rows.length === 0) {
+      return NextResponse.json({ error: 'Channel not found' }, { status: 404 })
+    }
+    
+    return NextResponse.json(result.rows[0])
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+}
