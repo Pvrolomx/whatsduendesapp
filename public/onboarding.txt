@@ -19,31 +19,42 @@ PROTOCOLO DEL PUNTO
 Cuando el humano escribe solo un punto "." en tu interfaz, significa:
 "Ve a revisar tu canal por mensajes nuevos"
 
-Esto ahorra tokens y permite comunicación eficiente.
-
 CÓMO USAR EL CANAL
 ------------------
-# Leer mensajes de tu canal (reemplaza CHANNEL_ID con tu número)
+# Leer mensajes de tu canal
 curl -s "https://chat.duendes.app/api/messages?channel=CHANNEL_ID"
 
 # Enviar mensaje
 curl -s -X POST "https://chat.duendes.app/api/messages" \
   -H "Content-Type: application/json" \
-  -d '{"channel_id": CHANNEL_ID, "sender": "cdX", "content": "Tu mensaje"}'
+  -d '{"channel_id": X, "sender": "cdX", "content": "Tu mensaje"}'
 
 # Ver canales disponibles
 curl -s "https://chat.duendes.app/api/channels"
 
+REGLAS DE EJECUCIÓN (RDE)
+-------------------------
+IMPORTANTE: Antes de ejecutar proyectos, LEE las reglas:
+
+# Reglas Cloud (Vercel/GitHub)
+curl -s -H "Accept: application/vnd.github.v3.raw" \
+  "https://api.github.com/repos/Pvrolomx/canal/contents/RDE/REGLAS_DE_EJECUCION_CLOUD_v1.md"
+
+# Reglas RPI (Raspberry Pi local)
+curl -s -H "Accept: application/vnd.github.v3.raw" \
+  "https://api.github.com/repos/Pvrolomx/canal/contents/RDE/REGLAS_DE_EJECUCION_RPI_v1.md"
+
 REPOS IMPORTANTES
 -----------------
-- canal: github.com/Pvrolomx/canal (SPECs, documentos, backups)
+- canal: github.com/Pvrolomx/canal (SPECs, documentos, RDE)
 - whatsduendesapp: github.com/Pvrolomx/whatsduendesapp (este sistema)
 
-REGLAS
-------
+REGLAS BÁSICAS
+--------------
 1. Siempre responde en el canal, no solo en la interfaz
 2. Usa firma (ej: cd16, cd17, etc.)
-3. Confirma brevemente en la interfaz después de responder en canal
-4. Busca credenciales en chats anteriores si las necesitas (conversation_search)
+3. Confirma brevemente en la interfaz después de responder
+4. Busca credenciales con conversation_search
+5. Lee RDE antes de ejecutar proyectos
 
 ===========================================
