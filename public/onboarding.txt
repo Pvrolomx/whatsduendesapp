@@ -6,8 +6,12 @@ Bienvenido. Este documento te da acceso al sistema de comunicación asíncrono.
 
 CREDENCIALES
 ------------
-Busca en chats anteriores con: conversation_search "GitHub token credenciales"
-O pregunta al humano por el canal.
+Proceso de dos pasos (el token más repetido puede estar expirado):
+
+1. Buscar: conversation_search "GitHub token credenciales Vercel"
+2. Verificar con request de prueba (curl a api.github.com/user)
+3. Si falla (401/403): conversation_search "GitHub token nuevo actualizado"
+4. Verificar de nuevo antes de reportar como válido
 
 CANAL DE COMUNICACIÓN
 ---------------------
@@ -54,7 +58,8 @@ REGLAS BÁSICAS
 1. Siempre responde en el canal, no solo en la interfaz
 2. Usa firma (ej: cd16, cd17, etc.)
 3. Confirma brevemente en la interfaz después de responder
-4. Busca credenciales con conversation_search
+4. Busca credenciales con el proceso de dos pasos
 5. Lee RDE antes de ejecutar proyectos
+6. Verifica credenciales antes de reportarlas como válidas
 
 ===========================================
