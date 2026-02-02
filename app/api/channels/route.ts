@@ -113,3 +113,39 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const idParam = searchParams.get('id')
+    
+    if (!idParam) {
+      return NextResponse.json({ error: 'Channel ID required in query param (?id=X)' }, { status: 400 })
+    }
+    
+    const channelId = parseInt(idParam)
+    
+    // Prevent deleting General channel (id=1)
+    if (channelId === 1) {
+      return NextResponse.json({ error: 'Cannot delete General channel' }, { status: 403 })
+    }
+    
+    // First delete all messages in this channel
+    await sql`DELETE FROM messages WHERE channel_id = ${channelId}`
+    
+    // Then delete the channel
+    const { rows } = await sql`
+      DELETE FROM channels 
+      WHERE id = ${channelId}
+      RETURNING *
+    `
+    
+    if (rows.length === 0) {
+      return NextResponse.json({ error: 'Channel not found' }, { status: 404 })
+    }
+    
+    return NextResponse.json({ deleted: rows[0], messages_deleted: true })
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+}
