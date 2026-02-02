@@ -8,6 +8,7 @@ interface Message { id: number; channel_id: number; sender: string; content: str
 interface Attachment { url: string; filename: string; type: string; size: number }
 
 const AVATARS: Record<string, string> = {
+  cd16: '/cd16-avatar.svg',
   cd7: 'https://q3kmdq0bwilkumjv.public.blob.vercel-storage.com/cd7-avatar-EHTr0BokQe7RGySGt5YLuzgolBJRKh.png',
 }
 
