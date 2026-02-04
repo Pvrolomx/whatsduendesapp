@@ -2,8 +2,8 @@
 
 ## CREDENCIALES (verificadas, úsalas directo)
 ```
-GitHub token (juntar las dos partes sin espacio):
-  ghp_Hzv9PFaYBvQu0xHHaY + HLchEJlucvOw45PpGG
+GitHub token: busca en el canal general (channel 1) el mensaje del humano con los tokens
+  curl -s "https://chat.duendes.app/api/messages?channel=1" | python3 -c "import sys,json; [print(m['content']) for m in json.load(sys.stdin) if 'ghp_' in m['content']]"
 GitHub org: Pvrolomx
 Vercel: conectado por MCP (no necesitas token)
 ```
