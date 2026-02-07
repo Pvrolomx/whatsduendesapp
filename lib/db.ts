@@ -73,7 +73,7 @@ export async function initDatabase() {
 }
 
 export async function getChannels() {
-  const { rows } = await sql`SELECT * FROM channels ORDER BY id`
+  const { rows } = await sql`SELECT * FROM channels ORDER BY id DESC`
   return rows
 }
 
