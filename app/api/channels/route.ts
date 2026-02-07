@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic'
 
 export async function GET() {
   try {
-    const { rows } = await sql`SELECT * FROM channels ORDER BY id`
+    const { rows } = await sql`SELECT * FROM channels ORDER BY id DESC`
     return NextResponse.json(rows)
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })
