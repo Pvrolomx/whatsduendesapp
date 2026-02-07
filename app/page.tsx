@@ -32,6 +32,7 @@ export default function WhatsApp() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const eventSourceRef = useRef<EventSource | null>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
     fetch('/api/init').then(r => r.json()).then(() => { setDbInitialized(true); loadChannels() }).catch(console.error)
@@ -194,6 +195,7 @@ export default function WhatsApp() {
     
     setMessages(prev => [...prev, tempMsg])
     setNewMessage('')
+    if (textareaRef.current) textareaRef.current.style.height = 'auto'
     setPendingFiles([])
     setLoading(true)
     
@@ -390,9 +392,9 @@ export default function WhatsApp() {
             <button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="p-2 text-gray-600 hover:text-[#075E54] disabled:opacity-50">
               {uploading ? <Loader2 className="animate-spin" size={24} /> : <Paperclip size={24} />}
             </button>
-            <textarea value={newMessage} onChange={e => setNewMessage(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }}}
-              placeholder="Escribe un mensaje..." rows={1} className="flex-1 p-3 rounded-full border-none outline-none resize-none max-h-32" style={{ minHeight: '44px' }} />
+            <textarea ref={textareaRef} value={newMessage} onChange={e => { setNewMessage(e.target.value); const ta = textareaRef.current; if (ta) { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 200) + 'px' } }}
+              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); const ta = textareaRef.current; if (ta) { ta.style.height = 'auto' } }}}
+              placeholder="Escribe un mensaje..." rows={1} className="flex-1 p-3 rounded-2xl border-none outline-none resize-none" style={{ minHeight: '44px', maxHeight: '200px', overflowY: 'auto' }} />
             <button onClick={handleSend} disabled={loading || (!newMessage.trim() && pendingFiles.length === 0)} className="bg-[#075E54] text-white p-3 rounded-full disabled:opacity-50">
               {loading ? <Loader2 className="animate-spin" size={20} /> : <Send size={20} />}
             </button>
