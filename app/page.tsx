@@ -27,7 +27,8 @@ export default function WhatsApp() {
   const [connected, setConnected] = useState(false)
   const [connectionStatus, setConnectionStatus] = useState('Conectando...')
   const [isDragging, setIsDragging] = useState(false)
-  const [selectedMessage, setSelectedMessage] = useState<number | null>(null)
+  const [selectedMessages, setSelectedMessages] = useState<Set<number>>(new Set())
+  const [isSelectionMode, setIsSelectionMode] = useState(false)
   const pollingRef = useRef<NodeJS.Timeout | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -69,7 +70,6 @@ export default function WhatsApp() {
     eventSource.onopen = () => { 
       setConnected(true)
       setConnectionStatus('Tiempo real')
-      // Detener polling si estaba activo
       if (pollingRef.current) {
         clearInterval(pollingRef.current)
         pollingRef.current = null
@@ -90,7 +90,6 @@ export default function WhatsApp() {
     eventSource.onerror = () => { 
       setConnected(false)
       setConnectionStatus('Polling...')
-      // Iniciar polling fallback
       if (!pollingRef.current) {
         pollingRef.current = setInterval(() => {
           loadMessages()
@@ -109,7 +108,6 @@ export default function WhatsApp() {
   }, [selectedChannel, dbInitialized, loadMessages])
 
   useEffect(() => {
-    // Solo auto-scroll si el usuario está cerca del final (dentro de 200px)
     const container = messagesEndRef.current?.parentElement
     if (container) {
       const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 200
@@ -119,7 +117,6 @@ export default function WhatsApp() {
     }
   }, [messages])
 
-  // Polling siempre activo cada 3 segundos (backup para SSE)
   useEffect(() => {
     if (!selectedChannel || !dbInitialized) return
     
@@ -180,9 +177,8 @@ export default function WhatsApp() {
     
     const msgContent = newMessage.trim() || '📎 Archivo'
     const msgAttachments = [...pendingFiles]
-    const tempId = -Date.now() // ID temporal negativo
+    const tempId = -Date.now()
     
-    // Optimistic: agregar mensaje inmediatamente
     const tempMsg: Message = {
       id: tempId,
       channel_id: selectedChannel.id,
@@ -207,13 +203,11 @@ export default function WhatsApp() {
       })
       const realMsg = await res.json()
       
-      // Reemplazar mensaje temporal con el real
       if (realMsg.id) {
         setMessages(prev => prev.map(m => m.id === tempId ? realMsg : m))
       }
     } catch (error) { 
       console.error('Error:', error)
-      // Quitar mensaje temporal en error
       setMessages(prev => prev.filter(m => m.id !== tempId))
       setNewMessage(msgContent)
       setPendingFiles(msgAttachments)
@@ -222,11 +216,7 @@ export default function WhatsApp() {
   }
 
   const handleDelete = async (msgId: number) => {
-    if (!confirm('¿Eliminar este mensaje?')) return
-    
-    // Optimistic delete
     setMessages(prev => prev.filter(m => m.id !== msgId))
-    setSelectedMessage(null)
     
     try {
       await fetch('/api/messages/delete', {
@@ -236,7 +226,59 @@ export default function WhatsApp() {
       })
     } catch (error) {
       console.error('Error deleting:', error)
-      loadMessages() // Reload on error
+      loadMessages()
+    }
+  }
+
+  const handleDeleteSelected = async () => {
+    if (selectedMessages.size === 0) return
+    if (!confirm(`¿Eliminar ${selectedMessages.size} mensaje(s)?`)) return
+    
+    const idsToDelete = Array.from(selectedMessages)
+    
+    // Optimistic delete
+    setMessages(prev => prev.filter(m => !selectedMessages.has(m.id)))
+    setSelectedMessages(new Set())
+    setIsSelectionMode(false)
+    
+    // Delete each message
+    for (const msgId of idsToDelete) {
+      try {
+        await fetch('/api/messages/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: msgId })
+        })
+      } catch (error) {
+        console.error('Error deleting:', error)
+      }
+    }
+  }
+
+  const toggleMessageSelection = (msgId: number) => {
+    if (msgId < 0) return // Don't select temp messages
+    setSelectedMessages(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(msgId)) {
+        newSet.delete(msgId)
+      } else {
+        newSet.add(msgId)
+      }
+      return newSet
+    })
+  }
+
+  const handleMessageClick = (e: React.MouseEvent, msgId: number) => {
+    e.stopPropagation()
+    if (isSelectionMode) {
+      toggleMessageSelection(msgId)
+    } else {
+      // Long press or single click toggles single selection for backwards compat
+      if (selectedMessages.has(msgId)) {
+        setSelectedMessages(new Set())
+      } else {
+        setSelectedMessages(new Set([msgId]))
+      }
     }
   }
 
@@ -264,8 +306,13 @@ export default function WhatsApp() {
     return <div className={`${size} rounded-full flex items-center justify-center text-white font-bold ${colors[senderName] || 'bg-gray-500'}`}>{senderName.charAt(0).toUpperCase()}</div>
   }
 
+  const exitSelectionMode = () => {
+    setIsSelectionMode(false)
+    setSelectedMessages(new Set())
+  }
+
   return (
-    <div className="h-screen flex bg-[#ECE5DD]" onClick={() => setSelectedMessage(null)}>
+    <div className="h-screen flex bg-[#ECE5DD]" onClick={() => { if (!isSelectionMode) setSelectedMessages(new Set()) }}>
       <div className={`${showSidebar || !selectedChannel ? 'flex' : 'hidden'} md:flex flex-col w-full md:w-80 bg-white border-r`}>
         <div className="bg-[#075E54] text-white p-4 flex items-center gap-3">
           <MessageCircle size={28} />
@@ -290,7 +337,7 @@ export default function WhatsApp() {
 
         <div className="flex-1 overflow-y-auto">
           {channels.map(channel => (
-            <div key={channel.id} onClick={() => { setSelectedChannel(channel); setShowSidebar(false) }}
+            <div key={channel.id} onClick={() => { setSelectedChannel(channel); setShowSidebar(false); exitSelectionMode() }}
               className={`p-4 border-b cursor-pointer hover:bg-gray-50 ${selectedChannel?.id === channel.id ? 'bg-green-50' : ''}`}>
               <div className="flex items-center gap-3">
                 {renderAvatar(channel.name, 'w-12 h-12')}
@@ -313,6 +360,20 @@ export default function WhatsApp() {
                 {connected ? <><Wifi size={12} className="text-green-300" /><span className="text-green-200">{connectionStatus}</span></> : <><WifiOff size={12} className="text-red-300" /><span className="text-red-200">{connectionStatus}</span></>}
               </p>
             </div>
+            {/* Selection mode toggle */}
+            <button 
+              onClick={() => { 
+                if (isSelectionMode) {
+                  exitSelectionMode()
+                } else {
+                  setIsSelectionMode(true)
+                }
+              }}
+              className={`p-2 rounded-full ${isSelectionMode ? 'bg-white/20' : 'hover:bg-white/10'}`}
+              title={isSelectionMode ? 'Cancelar selección' : 'Seleccionar mensajes'}
+            >
+              {isSelectionMode ? <X size={20} /> : <Trash2 size={20} />}
+            </button>
           </div>
 
           {isDragging && (
@@ -329,14 +390,21 @@ export default function WhatsApp() {
                 <div key={msg.id} className={`flex gap-2 ${isOwnMessage(msg.sender) ? 'justify-end' : 'justify-start'}`}>
                   {!isOwnMessage(msg.sender) && renderAvatar(msg.sender, 'w-8 h-8 flex-shrink-0')}
                   <div 
-                    className={`relative max-w-[75%] md:max-w-[55%] rounded-lg p-3 shadow ${isOwnMessage(msg.sender) ? 'bg-[#DCF8C6] rounded-tr-none' : 'bg-white rounded-tl-none'} ${msg.id < 0 ? 'opacity-70' : ''}`} 
+                    className={`relative max-w-[75%] md:max-w-[55%] rounded-lg p-3 shadow cursor-pointer transition-all ${isOwnMessage(msg.sender) ? 'bg-[#DCF8C6] rounded-tr-none' : 'bg-white rounded-tl-none'} ${msg.id < 0 ? 'opacity-70' : ''} ${selectedMessages.has(msg.id) ? 'ring-2 ring-red-500 bg-red-50' : ''}`} 
                     style={{ overflowWrap: 'break-word', wordBreak: 'break-word' }}
-                    onClick={(e) => { e.stopPropagation(); setSelectedMessage(selectedMessage === msg.id ? null : msg.id) }}
+                    onClick={(e) => handleMessageClick(e, msg.id)}
                   >
-                    {/* Delete button */}
-                    {selectedMessage === msg.id && msg.id > 0 && (
+                    {/* Checkbox for selection mode */}
+                    {isSelectionMode && msg.id > 0 && (
+                      <div className={`absolute -left-2 -top-2 w-6 h-6 rounded-full border-2 flex items-center justify-center ${selectedMessages.has(msg.id) ? 'bg-red-500 border-red-500' : 'bg-white border-gray-400'}`}>
+                        {selectedMessages.has(msg.id) && <span className="text-white text-xs">✓</span>}
+                      </div>
+                    )}
+                    
+                    {/* Single delete button (non-selection mode) */}
+                    {!isSelectionMode && selectedMessages.has(msg.id) && msg.id > 0 && (
                       <button 
-                        onClick={(e) => { e.stopPropagation(); handleDelete(msg.id) }}
+                        onClick={(e) => { e.stopPropagation(); if(confirm('¿Eliminar este mensaje?')) handleDelete(msg.id); setSelectedMessages(new Set()) }}
                         className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1.5 shadow-lg hover:bg-red-600"
                       >
                         <Trash2 size={14} />
@@ -374,6 +442,19 @@ export default function WhatsApp() {
             )}
             <div ref={messagesEndRef} />
           </div>
+
+          {/* Floating delete button when messages are selected */}
+          {selectedMessages.size > 0 && isSelectionMode && (
+            <div className="absolute bottom-24 left-1/2 transform -translate-x-1/2 z-20">
+              <button 
+                onClick={handleDeleteSelected}
+                className="bg-red-500 text-white px-6 py-3 rounded-full shadow-lg hover:bg-red-600 flex items-center gap-2 font-semibold"
+              >
+                <Trash2 size={20} />
+                Eliminar {selectedMessages.size} mensaje{selectedMessages.size > 1 ? 's' : ''}
+              </button>
+            </div>
+          )}
 
           {pendingFiles.length > 0 && (
             <div className="bg-gray-100 p-2 flex gap-2 overflow-x-auto">
