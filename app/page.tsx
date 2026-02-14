@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Send, Paperclip, ArrowLeft, File, X, Loader2, MessageCircle, Wifi, WifiOff, CheckCheck, Image, Trash2 } from 'lucide-react'
 
-interface Channel { id: number; name: string; description?: string }
+interface Channel { id: number; name: string; description?: string; color?: string }
 interface Message { id: number; channel_id: number; sender: string; content: string; attachments: Attachment[]; created_at: string; read_at: string | null }
 interface Attachment { url: string; filename: string; type: string; size: number }
 
@@ -299,11 +299,23 @@ export default function WhatsApp() {
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
   const isOwnMessage = (s: string) => s === 'humano' || s === 'human'
 
-  const renderAvatar = (senderName: string, size: string = 'w-10 h-10') => {
+  const COLOR_MAP: Record<string, string> = {
+    red: 'bg-red-500', green: 'bg-green-500', blue: 'bg-blue-500', yellow: 'bg-yellow-500',
+    purple: 'bg-purple-500', orange: 'bg-orange-500', pink: 'bg-pink-500', cyan: 'bg-cyan-500',
+    teal: 'bg-teal-500', indigo: 'bg-indigo-500', amber: 'bg-amber-500', lime: 'bg-lime-500',
+    emerald: 'bg-emerald-500', violet: 'bg-violet-500', fuchsia: 'bg-fuchsia-500', rose: 'bg-rose-500',
+    sky: 'bg-sky-500', gray: 'bg-gray-500',
+  }
+
+  const renderAvatar = (senderName: string, size: string = 'w-10 h-10', channelColor?: string | null) => {
     const avatarUrl = AVATARS[senderName]
     if (avatarUrl) return <img src={avatarUrl} alt={senderName} className={`${size} rounded-full object-cover`} />
-    const colors: Record<string, string> = { 'General': 'bg-blue-500', 'CD6': 'bg-purple-500', 'CD7': 'bg-green-500', 'CD8': 'bg-cyan-500', 'CD9': 'bg-rose-500', 'CD10': 'bg-amber-500', 'cd6': 'bg-purple-500', 'cd5': 'bg-orange-500', 'cd7': 'bg-green-500', 'cd8': 'bg-cyan-500', 'cd9': 'bg-rose-500', 'cd10': 'bg-amber-500', 'CD11': 'bg-indigo-500', 'cd11': 'bg-indigo-500', 'ia': 'bg-purple-500', 'CD12': 'bg-lime-500', 'cd12': 'bg-lime-500', 'CD13': 'bg-sky-500', 'cd13': 'bg-sky-500', 'CD14': 'bg-teal-500', 'cd14': 'bg-teal-500', 'CD15': 'bg-fuchsia-500', 'cd15': 'bg-fuchsia-500', 'CD16': 'bg-emerald-500', 'cd16': 'bg-emerald-500', 'CD17': 'bg-violet-500', 'cd17': 'bg-violet-500', 'CD18': 'bg-red-500', 'cd18': 'bg-red-500', 'Onboarding': 'bg-yellow-500', 'CD19': 'bg-yellow-500', 'cd19': 'bg-yellow-500', 'CD20': 'bg-pink-500', 'cd20': 'bg-pink-500', 'CG4': 'bg-red-600', 'cg4': 'bg-red-600', 'CG5': 'bg-yellow-500', 'cg5': 'bg-yellow-500', 'CD28': 'bg-red-500', 'cd28': 'bg-red-500', 'CD28-Angel': 'bg-red-500', 'cd28-angel': 'bg-red-500', 'CD37': 'bg-red-600', 'cd37': 'bg-red-600', 'CD37 Mi-Circulo': 'bg-red-600', 'CD38': 'bg-green-600', 'cd38': 'bg-green-600', 'CD37 Marejadas': 'bg-green-600', 'CD38 Debate HOA': 'bg-blue-600', 'cd38-debate': 'bg-blue-600', 'CD38 Mi-Circulo': 'bg-red-600', 'cd38-mi-circulo': 'bg-red-600', 'CD39 Onboarding': 'bg-yellow-500', 'cd39': 'bg-yellow-500', 'cd39-onboarding': 'bg-yellow-500', 'CD39 Carpinteria Placito': 'bg-green-500', 'cd39-carpinteria-placito': 'bg-green-500', 'CD39 Carpinteria': 'bg-green-500', 'CD39 Cierres': 'bg-red-500', 'cd39-cierres': 'bg-red-500', 'CD40': 'bg-yellow-500', 'cd40': 'bg-yellow-500', 'CD40 Onboarding': 'bg-yellow-500', 'CD40 Cheat Sheet': 'bg-green-500', 'CD40 Cheat Sheet 2': 'bg-red-500', 'cd40-cheat-sheet-2': 'bg-red-500', 'cd40-cheat-sheet': 'bg-green-500', 'cd40-onboarding': 'bg-yellow-500', 'CD40 Cheat Sheet 3': 'bg-yellow-500', 'CD40 Law': 'bg-blue-600', 'CD41 Onboarding': 'bg-yellow-400', 'cd41-onboarding': 'bg-yellow-400', 'cd40-law': 'bg-blue-600', 'cd40-cheat-sheet-3': 'bg-yellow-500', 'sistema': 'bg-gray-600' }
-    return <div className={`${size} rounded-full flex items-center justify-center text-white font-bold ${colors[senderName] || 'bg-gray-500'}`}>{senderName.charAt(0).toUpperCase()}</div>
+    
+    // Priority: 1) channel color from DB, 2) hardcoded legacy map, 3) fallback gray
+    const legacyColors: Record<string, string> = { 'General': 'bg-blue-500', 'CD6': 'bg-purple-500', 'CD7': 'bg-green-500', 'CD8': 'bg-cyan-500', 'CD9': 'bg-rose-500', 'CD10': 'bg-amber-500', 'cd6': 'bg-purple-500', 'cd5': 'bg-orange-500', 'cd7': 'bg-green-500', 'cd8': 'bg-cyan-500', 'cd9': 'bg-rose-500', 'cd10': 'bg-amber-500', 'CD11': 'bg-indigo-500', 'cd11': 'bg-indigo-500', 'ia': 'bg-purple-500', 'CD12': 'bg-lime-500', 'cd12': 'bg-lime-500', 'CD13': 'bg-sky-500', 'cd13': 'bg-sky-500', 'CD14': 'bg-teal-500', 'cd14': 'bg-teal-500', 'CD15': 'bg-fuchsia-500', 'cd15': 'bg-fuchsia-500', 'CD16': 'bg-emerald-500', 'cd16': 'bg-emerald-500', 'CD17': 'bg-violet-500', 'cd17': 'bg-violet-500', 'CD18': 'bg-red-500', 'cd18': 'bg-red-500', 'Onboarding': 'bg-yellow-500', 'CD19': 'bg-yellow-500', 'cd19': 'bg-yellow-500', 'CD20': 'bg-pink-500', 'cd20': 'bg-pink-500', 'CG4': 'bg-red-600', 'cg4': 'bg-red-600', 'CG5': 'bg-yellow-500', 'cg5': 'bg-yellow-500', 'CD28': 'bg-red-500', 'cd28': 'bg-red-500', 'CD28-Angel': 'bg-red-500', 'cd28-angel': 'bg-red-500', 'CD37': 'bg-red-600', 'cd37': 'bg-red-600', 'CD37 Mi-Circulo': 'bg-red-600', 'CD38': 'bg-green-600', 'cd38': 'bg-green-600', 'CD37 Marejadas': 'bg-green-600', 'CD38 Debate HOA': 'bg-blue-600', 'cd38-debate': 'bg-blue-600', 'CD38 Mi-Circulo': 'bg-red-600', 'cd38-mi-circulo': 'bg-red-600', 'CD39 Onboarding': 'bg-yellow-500', 'cd39': 'bg-yellow-500', 'cd39-onboarding': 'bg-yellow-500', 'CD39 Carpinteria Placito': 'bg-green-500', 'cd39-carpinteria-placito': 'bg-green-500', 'CD39 Carpinteria': 'bg-green-500', 'CD39 Cierres': 'bg-red-500', 'cd39-cierres': 'bg-red-500', 'CD40': 'bg-yellow-500', 'cd40': 'bg-yellow-500', 'CD40 Onboarding': 'bg-yellow-500', 'CD40 Cheat Sheet': 'bg-green-500', 'CD40 Cheat Sheet 2': 'bg-red-500', 'cd40-cheat-sheet-2': 'bg-red-500', 'cd40-cheat-sheet': 'bg-green-500', 'cd40-onboarding': 'bg-yellow-500', 'CD40 Cheat Sheet 3': 'bg-yellow-500', 'CD40 Law': 'bg-blue-600', 'CD41 Onboarding': 'bg-yellow-400', 'cd41-onboarding': 'bg-yellow-400', 'cd40-law': 'bg-blue-600', 'cd40-cheat-sheet-3': 'bg-yellow-500', 'sistema': 'bg-gray-600' }
+    
+    const bgClass = (channelColor && COLOR_MAP[channelColor]) || legacyColors[senderName] || 'bg-gray-500'
+    return <div className={`${size} rounded-full flex items-center justify-center text-white font-bold ${bgClass}`}>{senderName.charAt(0).toUpperCase()}</div>
   }
 
   const exitSelectionMode = () => {
@@ -340,7 +352,7 @@ export default function WhatsApp() {
             <div key={channel.id} onClick={() => { setSelectedChannel(channel); setShowSidebar(false); exitSelectionMode() }}
               className={`p-4 border-b cursor-pointer hover:bg-gray-50 ${selectedChannel?.id === channel.id ? 'bg-green-50' : ''}`}>
               <div className="flex items-center gap-3">
-                {renderAvatar(channel.name, 'w-12 h-12')}
+                {renderAvatar(channel.name, 'w-12 h-12', channel.color)}
                 <div><p className="font-semibold">{channel.name}</p><p className="text-sm text-gray-500">{channel.description || `Canal ${channel.id}`}</p></div>
               </div>
             </div>
@@ -353,7 +365,7 @@ export default function WhatsApp() {
           onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
           <div className="bg-[#075E54] text-white p-3 flex items-center gap-3 sticky top-0 z-10">
             <button onClick={() => setShowSidebar(true)} className="md:hidden p-1"><ArrowLeft size={24} /></button>
-            {renderAvatar(selectedChannel.name)}
+            {renderAvatar(selectedChannel.name, 'w-10 h-10', selectedChannel.color)}
             <div className="flex-1">
               <p className="font-semibold">{selectedChannel.name}</p>
               <p className="text-xs flex items-center gap-1">
