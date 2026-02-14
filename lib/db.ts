@@ -42,6 +42,16 @@ export async function initDatabase() {
         END IF;
       END $$
     `
+
+    // Add color column to channels if not exists
+    await sql`
+      DO $$ 
+      BEGIN 
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='channels' AND column_name='color') THEN
+          ALTER TABLE channels ADD COLUMN color VARCHAR(30) DEFAULT NULL;
+        END IF;
+      END $$
+    `
     
     await sql`
       CREATE TABLE IF NOT EXISTS files (
