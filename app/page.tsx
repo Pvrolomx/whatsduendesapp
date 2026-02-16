@@ -334,19 +334,6 @@ export default function WhatsApp() {
           </div>
         </div>
         
-        <div className="p-3 bg-gray-50 border-b">
-          <select value={sender} onChange={e => setSender(e.target.value)} className="w-full p-2 rounded border text-sm">
-            <option value="humano">👤 Humano</option>
-            <option value="ia">🤖 IA</option>
-            <option value="cd6">🔵 CD6</option>
-            <option value="cd5">🟠 CD5</option>
-            <option value="cd10">🟡 CD10</option>
-            <option value="cd11">🟣 CD11</option>
-            <option value="cg4">🔴 CG4</option>
-            <option value="cg5">🟡 CG5</option>
-          </select>
-        </div>
-
         <div className="flex-1 overflow-y-auto">
           {channels.map(channel => (
             <div key={channel.id} onClick={() => { setSelectedChannel(channel); setShowSidebar(false); exitSelectionMode() }}
