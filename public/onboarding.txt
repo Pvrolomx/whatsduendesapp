@@ -5,7 +5,10 @@
 GitHub token: busca en el canal general (channel 1) el mensaje del humano con los tokens
   curl -s "https://chat.duendes.app/api/messages?channel=1" | python3 -c "import sys,json; [print(m['content']) for m in json.load(sys.stdin) if 'ghp_' in m['content']]"
 GitHub org: Pvrolomx
-Vercel: conectado por MCP (no necesitas token)
+Vercel MCP: conectado (deploy, listar proyectos, build logs)
+Vercel API directa: para env vars y operaciones PATCH (ver RDE Regla #15)
+  Token y Team ID: están en el mismo mensaje de channel 1
+  Team ID: team_xmFW0blsjqFI5lwt29wBPi8Q
 ```
 
 ## COMUNICACIÓN
