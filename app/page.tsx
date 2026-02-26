@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Send, Paperclip, ArrowLeft, File, X, Loader2, MessageCircle, Wifi, WifiOff, CheckCheck, Image, Trash2 } from 'lucide-react'
+import { Send, Paperclip, ArrowLeft, File, X, Loader2, MessageCircle, RefreshCw, CheckCheck, Image, Trash2 } from 'lucide-react'
 
 interface Channel { id: number; name: string; description?: string; color?: string }
 interface Message { id: number; channel_id: number; sender: string; content: string; attachments: Attachment[]; created_at: string; read_at: string | null }
@@ -24,15 +24,13 @@ export default function WhatsApp() {
   const [uploading, setUploading] = useState(false)
   const [pendingFiles, setPendingFiles] = useState<Attachment[]>([])
   const [dbInitialized, setDbInitialized] = useState(false)
-  const [connected, setConnected] = useState(false)
-  const [connectionStatus, setConnectionStatus] = useState('Conectando...')
+  const [refreshing, setRefreshing] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [selectedMessages, setSelectedMessages] = useState<Set<number>>(new Set())
   const [isSelectionMode, setIsSelectionMode] = useState(false)
-  const pollingRef = useRef<NodeJS.Timeout | null>(null)
+  const [lastRefresh, setLastRefresh] = useState<Date | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const eventSourceRef = useRef<EventSource | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
@@ -54,57 +52,14 @@ export default function WhatsApp() {
       const res = await fetch(`/api/messages?channel=${selectedChannel.id}&limit=100`)
       const data = await res.json()
       if (Array.isArray(data)) setMessages(data)
+      setLastRefresh(new Date())
     } catch (error) { console.error('Error:', error) }
   }, [selectedChannel])
 
+  // Load messages only when channel changes - NO polling
   useEffect(() => {
     if (!selectedChannel || !dbInitialized) return
-    if (eventSourceRef.current) eventSourceRef.current.close()
-    
     loadMessages()
-    setConnectionStatus('Conectando...')
-    
-    const eventSource = new EventSource(`/api/subscribe?channel=${selectedChannel.id}`)
-    eventSourceRef.current = eventSource
-
-    eventSource.onopen = () => { 
-      setConnected(true)
-      setConnectionStatus('Tiempo real')
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current)
-        pollingRef.current = null
-      }
-    }
-    eventSource.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data)
-        if (data.type === 'connected') { setConnected(true); setConnectionStatus('Tiempo real') }
-        else if (data.type === 'message') {
-          setMessages(prev => {
-            if (prev.find(m => m.id === data.data.id)) return prev
-            return [...prev, data.data]
-          })
-        }
-      } catch (e) { console.error('SSE error:', e) }
-    }
-    eventSource.onerror = () => { 
-      setConnected(false)
-      setConnectionStatus('Polling...')
-      if (!pollingRef.current) {
-        pollingRef.current = setInterval(() => {
-          loadMessages()
-        }, 3000)
-      }
-    }
-
-    return () => { 
-      eventSource.close()
-      setConnected(false)
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current)
-        pollingRef.current = null
-      }
-    }
   }, [selectedChannel, dbInitialized, loadMessages])
 
   useEffect(() => {
@@ -117,15 +72,12 @@ export default function WhatsApp() {
     }
   }, [messages])
 
-  useEffect(() => {
-    if (!selectedChannel || !dbInitialized) return
-    
-    const interval = setInterval(() => {
-      loadMessages()
-    }, 3000)
-    
-    return () => clearInterval(interval)
-  }, [selectedChannel, dbInitialized, loadMessages])
+  // Manual refresh
+  const handleRefresh = async () => {
+    setRefreshing(true)
+    await loadMessages()
+    setRefreshing(false)
+  }
 
   const uploadFile = async (file: File) => {
     const formData = new FormData()
@@ -206,6 +158,8 @@ export default function WhatsApp() {
       if (realMsg.id) {
         setMessages(prev => prev.map(m => m.id === tempId ? realMsg : m))
       }
+      // Refresh after sending to catch any new messages
+      setTimeout(() => loadMessages(), 500)
     } catch (error) { 
       console.error('Error:', error)
       setMessages(prev => prev.filter(m => m.id !== tempId))
@@ -236,12 +190,10 @@ export default function WhatsApp() {
     
     const idsToDelete = Array.from(selectedMessages)
     
-    // Optimistic delete
     setMessages(prev => prev.filter(m => !selectedMessages.has(m.id)))
     setSelectedMessages(new Set())
     setIsSelectionMode(false)
     
-    // Delete each message
     for (const msgId of idsToDelete) {
       try {
         await fetch('/api/messages/delete', {
@@ -256,7 +208,7 @@ export default function WhatsApp() {
   }
 
   const toggleMessageSelection = (msgId: number) => {
-    if (msgId < 0) return // Don't select temp messages
+    if (msgId < 0) return
     setSelectedMessages(prev => {
       const newSet = new Set(prev)
       if (newSet.has(msgId)) {
@@ -273,7 +225,6 @@ export default function WhatsApp() {
     if (isSelectionMode) {
       toggleMessageSelection(msgId)
     } else {
-      // Long press or single click toggles single selection for backwards compat
       if (selectedMessages.has(msgId)) {
         setSelectedMessages(new Set())
       } else {
@@ -311,7 +262,6 @@ export default function WhatsApp() {
     const avatarUrl = AVATARS[senderName]
     if (avatarUrl) return <img src={avatarUrl} alt={senderName} className={`${size} rounded-full object-cover`} />
     
-    // Priority: 1) channel color from DB, 2) hardcoded legacy map, 3) fallback gray
     const legacyColors: Record<string, string> = { 'General': 'bg-blue-500', 'CD6': 'bg-purple-500', 'CD7': 'bg-green-500', 'CD8': 'bg-cyan-500', 'CD9': 'bg-rose-500', 'CD10': 'bg-amber-500', 'cd6': 'bg-purple-500', 'cd5': 'bg-orange-500', 'cd7': 'bg-green-500', 'cd8': 'bg-cyan-500', 'cd9': 'bg-rose-500', 'cd10': 'bg-amber-500', 'CD11': 'bg-indigo-500', 'cd11': 'bg-indigo-500', 'ia': 'bg-purple-500', 'CD12': 'bg-lime-500', 'cd12': 'bg-lime-500', 'CD13': 'bg-sky-500', 'cd13': 'bg-sky-500', 'CD14': 'bg-teal-500', 'cd14': 'bg-teal-500', 'CD15': 'bg-fuchsia-500', 'cd15': 'bg-fuchsia-500', 'CD16': 'bg-emerald-500', 'cd16': 'bg-emerald-500', 'CD17': 'bg-violet-500', 'cd17': 'bg-violet-500', 'CD18': 'bg-red-500', 'cd18': 'bg-red-500', 'Onboarding': 'bg-yellow-500', 'CD19': 'bg-yellow-500', 'cd19': 'bg-yellow-500', 'CD20': 'bg-pink-500', 'cd20': 'bg-pink-500', 'CG4': 'bg-red-600', 'cg4': 'bg-red-600', 'CG5': 'bg-yellow-500', 'cg5': 'bg-yellow-500', 'CD28': 'bg-red-500', 'cd28': 'bg-red-500', 'CD28-Angel': 'bg-red-500', 'cd28-angel': 'bg-red-500', 'CD37': 'bg-red-600', 'cd37': 'bg-red-600', 'CD37 Mi-Circulo': 'bg-red-600', 'CD38': 'bg-green-600', 'cd38': 'bg-green-600', 'CD37 Marejadas': 'bg-green-600', 'CD38 Debate HOA': 'bg-blue-600', 'cd38-debate': 'bg-blue-600', 'CD38 Mi-Circulo': 'bg-red-600', 'cd38-mi-circulo': 'bg-red-600', 'CD39 Onboarding': 'bg-yellow-500', 'cd39': 'bg-yellow-500', 'cd39-onboarding': 'bg-yellow-500', 'CD39 Carpinteria Placito': 'bg-green-500', 'cd39-carpinteria-placito': 'bg-green-500', 'CD39 Carpinteria': 'bg-green-500', 'CD39 Cierres': 'bg-red-500', 'cd39-cierres': 'bg-red-500', 'CD40': 'bg-yellow-500', 'cd40': 'bg-yellow-500', 'CD40 Onboarding': 'bg-yellow-500', 'CD40 Cheat Sheet': 'bg-green-500', 'CD40 Cheat Sheet 2': 'bg-red-500', 'cd40-cheat-sheet-2': 'bg-red-500', 'cd40-cheat-sheet': 'bg-green-500', 'cd40-onboarding': 'bg-yellow-500', 'CD40 Cheat Sheet 3': 'bg-yellow-500', 'CD40 Law': 'bg-blue-600', 'CD41 Onboarding': 'bg-yellow-400', 'cd41-onboarding': 'bg-yellow-400', 'cd40-law': 'bg-blue-600', 'cd40-cheat-sheet-3': 'bg-yellow-500', 'sistema': 'bg-gray-600' }
     
     const bgClass = (channelColor && COLOR_MAP[channelColor]) || legacyColors[senderName] || 'bg-gray-500'
@@ -321,6 +271,11 @@ export default function WhatsApp() {
   const exitSelectionMode = () => {
     setIsSelectionMode(false)
     setSelectedMessages(new Set())
+  }
+
+  const formatLastRefresh = () => {
+    if (!lastRefresh) return ''
+    return lastRefresh.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
   }
 
   return (
@@ -355,10 +310,19 @@ export default function WhatsApp() {
             {renderAvatar(selectedChannel.name, 'w-10 h-10', selectedChannel.color)}
             <div className="flex-1">
               <p className="font-semibold">{selectedChannel.name}</p>
-              <p className="text-xs flex items-center gap-1">
-                {connected ? <><Wifi size={12} className="text-green-300" /><span className="text-green-200">{connectionStatus}</span></> : <><WifiOff size={12} className="text-red-300" /><span className="text-red-200">{connectionStatus}</span></>}
+              <p className="text-xs text-green-200">
+                {lastRefresh ? `Último refresh: ${formatLastRefresh()}` : 'Manual refresh'}
               </p>
             </div>
+            {/* Refresh button */}
+            <button 
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="p-2 rounded-full hover:bg-white/10 disabled:opacity-50"
+              title="Actualizar mensajes"
+            >
+              <RefreshCw size={20} className={refreshing ? 'animate-spin' : ''} />
+            </button>
             {/* Selection mode toggle */}
             <button 
               onClick={() => { 
@@ -393,14 +357,12 @@ export default function WhatsApp() {
                     style={{ overflowWrap: 'break-word', wordBreak: 'break-word' }}
                     onClick={(e) => handleMessageClick(e, msg.id)}
                   >
-                    {/* Checkbox for selection mode */}
                     {isSelectionMode && msg.id > 0 && (
                       <div className={`absolute -left-2 -top-2 w-6 h-6 rounded-full border-2 flex items-center justify-center ${selectedMessages.has(msg.id) ? 'bg-red-500 border-red-500' : 'bg-white border-gray-400'}`}>
                         {selectedMessages.has(msg.id) && <span className="text-white text-xs">✓</span>}
                       </div>
                     )}
                     
-                    {/* Single delete button (non-selection mode) */}
                     {!isSelectionMode && selectedMessages.has(msg.id) && msg.id > 0 && (
                       <button 
                         onClick={(e) => { e.stopPropagation(); if(confirm('¿Eliminar este mensaje?')) handleDelete(msg.id); setSelectedMessages(new Set()) }}
@@ -442,7 +404,6 @@ export default function WhatsApp() {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Floating delete button when messages are selected */}
           {selectedMessages.size > 0 && isSelectionMode && (
             <div className="absolute bottom-24 left-1/2 transform -translate-x-1/2 z-20">
               <button 
