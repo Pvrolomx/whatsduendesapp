@@ -23,15 +23,46 @@ function rateLimit(ip: string, limit: number, intervalMs: number): boolean {
   return true
 }
 
+function isValidApiKey(request: NextRequest): boolean {
+  const apiKey = process.env.API_KEY
+  if (!apiKey) return false
+
+  // Check Bearer token
+  const authHeader = request.headers.get('authorization')
+  if (authHeader?.startsWith('Bearer ')) {
+    return authHeader.slice(7) === apiKey
+  }
+
+  // Check X-API-Key header
+  const xApiKey = request.headers.get('x-api-key')
+  if (xApiKey) {
+    return xApiKey === apiKey
+  }
+
+  // Check query param (for simple curl usage)
+  const { searchParams } = new URL(request.url)
+  const keyParam = searchParams.get('key')
+  if (keyParam) {
+    return keyParam === apiKey
+  }
+
+  return false
+}
+
+function isValidAuthCookie(request: NextRequest): boolean {
+  const authCookie = request.cookies.get(AUTH_COOKIE)
+  return !!authCookie?.value
+}
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0] || 
              request.headers.get('x-real-ip') || 
              'unknown'
   
-  // Rate limiting para APIs
+  // API routes
   if (pathname.startsWith('/api')) {
-    // Auth endpoint: muy estricto (5/min)
+    // Auth endpoint: always open (it IS the login)
     if (pathname === '/api/auth') {
       if (!rateLimit(`auth:${ip}`, 5, 60000)) {
         return NextResponse.json(
@@ -39,18 +70,29 @@ export function middleware(request: NextRequest) {
           { status: 429 }
         )
       }
+      return NextResponse.next()
     }
-    // Write endpoints: moderado (30/min)
-    else if (request.method === 'POST' || request.method === 'DELETE') {
+
+    // All other API routes: require API key OR valid auth cookie
+    const hasApiKey = isValidApiKey(request)
+    const hasCookie = isValidAuthCookie(request)
+
+    if (!hasApiKey && !hasCookie) {
+      return NextResponse.json(
+        { error: 'Unauthorized. Provide Bearer token, X-API-Key header, or ?key= param.' },
+        { status: 401 }
+      )
+    }
+
+    // Rate limiting
+    if (request.method === 'POST' || request.method === 'DELETE') {
       if (!rateLimit(`write:${ip}`, 30, 60000)) {
         return NextResponse.json(
           { error: 'Rate limit exceeded. Max 30 writes/minute.' },
           { status: 429 }
         )
       }
-    }
-    // Read endpoints: permisivo (100/min)
-    else if (request.method === 'GET') {
+    } else if (request.method === 'GET') {
       if (!rateLimit(`read:${ip}`, 100, 60000)) {
         return NextResponse.json(
           { error: 'Rate limit exceeded. Max 100 reads/minute.' },
@@ -62,17 +104,17 @@ export function middleware(request: NextRequest) {
     return NextResponse.next()
   }
   
-  // Permitir login page
-  if (pathname === '/login') {
+  // Allow login page and static onboarding file
+  if (pathname === '/login' || pathname === '/onboarding.txt') {
     return NextResponse.next()
   }
   
-  // Permitir assets estáticos
+  // Allow static assets
   if (pathname.startsWith('/_next') || pathname.includes('.')) {
     return NextResponse.next()
   }
   
-  // Verificar cookie de autenticación para páginas
+  // Check auth cookie for pages
   const authCookie = request.cookies.get(AUTH_COOKIE)
   
   if (!authCookie?.value) {
