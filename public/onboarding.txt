@@ -1,45 +1,121 @@
 # ONBOARDING COLMENA v2
 
-## CREDENCIALES
-GitHub token y Vercel token están en canal 1:
+## CREDENCIALES (verificadas, úsalas directo)
 ```
-curl -s "https://chat.duendes.app/api/messages?channel=1" | python3 -c "import sys,json; [print(m['content']) for m in json.load(sys.stdin) if 'ghp_' in m['content'] or 'vercel' in m['content'].lower()]"
+GitHub token: busca en el canal general (channel 1) el mensaje del humano con los tokens
+  curl -s "https://chat.duendes.app/api/messages?channel=1" | python3 -c "import sys,json; [print(m['content']) for m in json.load(sys.stdin) if 'ghp_' in m['content']]"
+GitHub org: Pvrolomx
+Vercel MCP: conectado (deploy, listar proyectos, build logs)
+Vercel API directa: para env vars y operaciones PATCH (ver RDE Regla #15)
+  Token y Team ID: están en el mismo mensaje de channel 1
+  Team ID: team_xmFW0blsjqFI5lwt29wBPi8Q
 ```
-- GitHub org: Pvrolomx
-- Vercel Team ID: team_xmFW0blsjqFI5lwt29wBPi8Q
 
-## REGLAS DE EJECUCIÓN (leer siempre, antes de cualquier acción)
+## COMUNICACIÓN
+```
+Canal: https://chat.duendes.app
+API: https://chat.duendes.app/api/messages
+
+# Leer canal
+curl -s "https://chat.duendes.app/api/messages?channel=CHANNEL_ID" | python3 -m json.tool
+
+# Escribir en canal
+curl -s -X POST "https://chat.duendes.app/api/messages" \
+  -H "Content-Type: application/json" \
+  -d '{"channel_id": X, "sender": "cdX", "content": "mensaje"}'
+```
+
+Cuando el humano escribe "." significa: revisa tu canal por mensajes nuevos.
+
+## REGLAS (RDE Cloud v1)
 ```
 curl -s -H "Accept: application/vnd.github.v3.raw" \
   "https://api.github.com/repos/Pvrolomx/canal/contents/RDE/REGLAS_DE_EJECUCION_CLOUD_v1.md"
 ```
 
-## SI TU MISIÓN INVOLUCRA BROWSER / CLAUDE IN CHROME / DEBATE MULTI-IA
-```
-curl -s -H "Accept: application/vnd.github.v3.raw" \
-  "https://api.github.com/repos/Pvrolomx/canal/contents/RDE/RDB_BROWSER_ENGINE_v1.md"
-```
+## ECOSISTEMA — 33 repos, 29 live
 
-## COMUNICACIÓN
-```
-# Leer canal
-curl -s "https://chat.duendes.app/api/messages?channel=CHANNEL_ID"
+### 🏰 CASTLE — Vertical property management PV (cliente real: castlesolutions.mx)
+| Repo | Qué hace | Live | Dominio custom |
+|------|----------|------|----------------|
+| castle-ops | Operaciones, mantenimiento, incidencias. 15 propietarios, 10 propiedades, QR, PIN admin, i18n | ✅ | castlesolutions.mx |
+| castle-payments | Portal pagos Stripe + Supabase | ✅ | castlesolutions.biz |
+| castle-checkin | Check-in huéspedes con QR | ✅ | — |
+| castle-solutions | Landing original Castle | ✅ | — |
 
-# Escribir en canal
-curl -s -X POST "https://chat.duendes.app/api/messages" \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: 8zLmzhb7KHqIyk1qktkHZHWa8kwxB2bJwKkXUOfwIwE" \
-  -d '{"channel_id": X, "sender": "cdX", "content": "mensaje"}'
-```
-El Arquitecto te dirá tu canal. Canal 1 es el general.
+### 💼 EXPAT ADVISOR — Vertical legal/condominios (cliente real: expatadvisormx.com)
+| Repo | Qué hace | Live |
+|------|----------|------|
+| expat-advisor-mx | Asistente legal bilingüe ES/EN, ley condominal Nayarit | ✅ |
+| expat-advisor-landing | Landing page | ✅ |
 
-## ECOSISTEMA
-- Organización GitHub: github.com/Pvrolomx (~33 repos activos, en constante evolución)
-- Deployments: Vercel (la mayoría live bajo dominios duendes.app y custom)
-- Canales activos en chat.duendes.app — el Arquitecto te indicará cuál es el tuyo
+### 🔮 ASTRO4 — App astrología 4 tradiciones (PRÓXIMO LANZAMIENTO)
+| Repo | Qué hace | Live |
+|------|----------|------|
+| astro4 | Guía cósmica: occidental + védica + china + numerología. API Anthropic, PWA, share cards | ✅ (necesita fix deploy) |
 
-## PROTOCOLO
-- Cuando el humano escribe "." → revisa tu canal
-- No crees subcanal salvo que te lo pidan
-- No construyas nada salvo que te lo pidan
-- Reporta en el chat, no en el canal, salvo que te lo pidan
+### 🔮 ORÁCULOS
+| Repo | Qué hace | Live |
+|------|----------|------|
+| kin-maya | Guía maya diaria | ✅ |
+| tarot-ceo | Tarot estratégico para profesionales | ✅ |
+| hexadecision | I-Ching algorítmico verificable | ✅ |
+| numera | Numerología + biorritmos | ✅ |
+
+### 📊 WEAK SIGNALS
+| Repo | Qué hace | Live |
+|------|----------|------|
+| supply-shock | Detector disrupción cadena suministro | ✅ |
+| corporate-decay | Detector bancarrotas 30-90 días antes | ✅ |
+| fantasma | Early warning crisis MXN (Python) | ✅ |
+
+### 💰 PAGOS
+| Repo | Qué hace | Live |
+|------|----------|------|
+| rolo-payments | Portal de cobros personal | ✅ |
+| cal-pay | Sistema citas con pagos | ✅ |
+
+### 🏠 APPS LOCALES PV
+| Repo | Qué hace | Live |
+|------|----------|------|
+| anfitrion-mx | Calculadora fiscal hosts Airbnb México | ✅ |
+| medicompara | Comparador precios medicamentos USA→MX | ✅ |
+| lluvia-alert | Alerta lluvia 10-15 min, Bahía de Banderas | ✅ |
+| desarrollo-angeles | Fraccionadora lotes PV | ✅ |
+| HCRPV | Healthcare resources PV | ❌ |
+| mpm-psi | Landing psicóloga + Calendly + Stripe | ✅ |
+| notaria-solutions | Sitio notaría | ✅ |
+
+### 🏗️ INFRAESTRUCTURA
+| Repo | Qué hace | Live |
+|------|----------|------|
+| canal | Mensajería, RDE, protocolo dialéctico | ✅ |
+| whatsduendesapp | Chat humano↔IA | ✅ |
+| email-service | API envío emails | ✅ |
+| colmena-dashboard | Panel central status apps | ✅ |
+| que-app-necesito | Meta-app: qué app construir | ✅ |
+
+### 🧊 OTROS
+| Repo | Qué hace | Live |
+|------|----------|------|
+| duende-v1 | Prototipo original | ✅ |
+| colorsnap | Generador paletas colores | ✅ |
+| Legal-Solutions | Landing legal | ✅ |
+| development-solutions | Landing desarrollo | ✅ |
+| realtor-comps | Comparables inmobiliarios | ❌ |
+
+## CANALES ACTIVOS
+| ID | Uso |
+|----|-----|
+| 1 | General (onboarding, RDE, notas para nuevos CDs) |
+| 4312 | TESIS-Monetización (debate dialéctico activo) |
+| 4313 | TESIS-Portafolio (pendiente) |
+| 4314 | TESIS-Vertical (pendiente) |
+
+Subcanales CD (históricos): 4301-4311
+
+## PROTOCOLO DEL PUNTO
+Cuando el humano escribe "." → revisa tu canal.
+No crees subcanal salvo que te lo pidan.
+No construyas nada salvo que te lo pidan.
+Reporta aquí en el chat, no en el canal, salvo que te lo pidan.
